@@ -6,6 +6,20 @@
 <meta name="apple-mobile-web-app-title" content="tracKYOU">
 <link rel="apple-touch-icon" href="./icon-180.png">
 
+<style>
+.auth-gate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(10,12,16,.72);backdrop-filter:blur(12px)}
+.auth-gate[hidden]{display:none}
+.auth-card{width:min(420px,100%);padding:30px;border:1px solid var(--line2);border-radius:22px;background:var(--surface);box-shadow:var(--shadow);color:var(--ink)}
+.auth-brand{font-size:24px;margin-bottom:28px}
+.auth-title{font-family:var(--display);font-size:26px;font-weight:700;margin-bottom:8px}
+.auth-copy{color:var(--ink2);line-height:1.5;margin:0 0 22px}
+.auth-label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin:14px 0}
+.auth-input{display:block;width:100%;box-sizing:border-box;margin-top:7px;padding:13px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--surface2);color:var(--ink);font:inherit;outline:none}
+.auth-input:focus{border-color:var(--should);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.auth-btn{width:100%;border:0;border-radius:12px;padding:13px 16px;margin-top:8px;background:var(--ink);color:var(--on-ink);font:600 15px var(--body);cursor:pointer}
+.auth-btn:disabled{opacity:.6;cursor:wait}
+.auth-msg{min-height:20px;margin-top:12px;font-size:13px;color:var(--ink2)}
+</style>
 </head><body>
 <title>tracKYOU</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -331,7 +345,20 @@ h1,h2,h3{font-family:var(--display);margin:0;font-weight:700;letter-spacing:-.02
 <div class="modal" id="add" role="dialog" aria-modal="true" aria-label="Add something"></div>
 <div class="modal" id="settings" role="dialog" aria-modal="true" aria-label="Settings"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="authGate" class="auth-gate" hidden>
+  <div class="auth-card">
+    <div class="wordmark auth-brand">trac<b>KYOU</b></div>
+    <div class="auth-title">Sign in to tracKYOU</div>
+    <p class="auth-copy">Your tasks, goals and reminders will sync across your devices.</p>
+    <label class="auth-label">Email<input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="you@example.com"></label>
+    <label class="auth-label">Password<input id="authPassword" class="auth-input" type="password" autocomplete="current-password" placeholder="Password"></label>
+    <button id="authLogin" class="auth-btn" type="button">Sign in</button>
+    <div id="authMsg" class="auth-msg" aria-live="polite"></div>
+  </div>
+</div>
 
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
 'use strict';
@@ -872,7 +899,7 @@ function renderSettings(){
   $('#settings').innerHTML='<div class="msheet"><div class="grab"></div><div class="bar"><div class="grow wordmark" aria-label="tracKYOU">trac<b>KYOU</b></div><button class="ibtn" data-act="sclose" aria-label="Close">'+ic.x+'</button></div>'+
    '<div class="fld"><div class="lb">Appearance</div><div class="seg" role="group" aria-label="Theme">'+[['light','Light'],['dark','Dark'],['system','System']].map(function(x){return '<button data-act="theme" data-k="'+x[0]+'" aria-pressed="'+(th===x[0])+'">'+x[1]+'</button>'}).join('')+'</div></div>'+
    '<div class="fld"><div class="lb">Priority colours</div>'+['must','important','should'].map(function(p){var v='--'+(p==='important'?'imp':p);return '<div class="swrow"><span style="display:flex;align-items:center;gap:10px"><span class="shape '+PRI[p].cls+'"></span>'+PRI[p].n+'</span><input type="color" data-var="'+v+'" value="'+col(v)+'" aria-label="'+PRI[p].n+' colour"></div>'}).join('')+'</div>'+
-   '<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
+   '<div class="fld"><div class="lb">Cloud sync</div><div class="kv"><span>Account</span><span>'+esc(cloudUser?cloudUser.email:'Not signed in')+'</span></div><div class="btns"><button class="btn ghost" data-act="signout"'+(cloudUser?'':' disabled')+'>Sign out</button></div></div>'+'<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
    '<div class="fld"><div class="lb">Prototype controls</div><p class="hint" style="margin-top:0">Time is fixed at '+dLong(T0)+', 8:58 PM so every state is visible. Skip ahead to watch days close and lock.</p><div class="btns"><button class="btn sec" data-act="skipday">Skip to next morning</button><button class="btn ghost" data-act="reset">Reset demo</button></div></div></div>';
 }
 
@@ -969,9 +996,10 @@ document.addEventListener('click',function(ev){
    case 'settings':renderSettings();$('#settings').classList.add('on');break;
    case 'sclose':$('#settings').classList.remove('on');break;
    case 'theme':{var k=el.getAttribute('data-k');try{localStorage.setItem('tk-theme',k)}catch(e){}applyTheme(k);renderSettings();break}
+   case 'signout':supabaseClient.auth.signOut();break
    case 'skipday':{TODAY=addDays(TODAY,1);NOWMIN=8*60;justPassed=addDays(TODAY,-1);sel=TODAY;view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};detail=null;$('#settings').classList.remove('on');render();
       toast(dLong(TODAY).split(', ')[1]+': '+dShort(addDays(TODAY,-1))+' is closed, '+dShort(addDays(TODAY,-2))+' is now locked');break}
-   case 'reset':clearSavedData();init();saveData();$('#settings').classList.remove('on');closeDay();render();toast('Demo reset');break;   case 'gtoggle':open[id]=!open[id];renderGoals();break;
+   case 'reset':clearSavedData();items=[];logs={};goals=[];nid=100;if(cloudUser)queueCloudSave();$('#settings').classList.remove('on');closeDay();render();toast('All data cleared');break;   case 'gtoggle':open[id]=!open[id];renderGoals();break;
    case 'gplus':{var g2=goals.filter(function(x){return x.id===id})[0];g2.manual=(g2.manual||0)+1;persistSoon();renderGoals();toast('+1 added to '+g2.title);break}
    case 'sf':srch[el.getAttribute('data-k')]=el.getAttribute('data-v');renderSearch();break;
    case 'sinc':srch.inc=!srch.inc;renderSearch();break;
@@ -1027,15 +1055,21 @@ document.addEventListener('drop',function(e){var c=e.target.closest&&e.target.cl
 function applyTheme(k){var r=document.documentElement;if(k==='light'||k==='dark')r.setAttribute('data-theme',k);else r.removeAttribute('data-theme')}
 try{var th=localStorage.getItem('tk-theme');if(th)applyTheme(th)}catch(e){}
 
-/* ---------- persistent local storage ---------- */
+/* ---------- local + cloud persistence ---------- */
 var STORAGE_KEY='trackyou-data-v1';
-function saveData(){
+var SUPABASE_URL='https://qglfbqgsqlfqrsiphbwg.supabase.co';
+var SUPABASE_PUBLISHABLE_KEY='sb_publishable_JOXTApqzpv4mPKjaQ5LuTw_PKM5x9K2';
+var supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
+var cloudUser=null,cloudTimer=null,cloudSyncing=false,cloudRealtime=null;
+
+function localSaveData(){
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({
-      items:items,logs:logs,goals:goals,nid:nid,
-      theme:(function(){try{return localStorage.getItem('tk-theme')||''}catch(e){return ''}})()
-    }));
+    localStorage.setItem(STORAGE_KEY,JSON.stringify({items:items,logs:logs,goals:goals,nid:nid}));
   }catch(e){}
+}
+function saveData(){
+  localSaveData();
+  if(cloudUser) queueCloudSave();
 }
 function loadData(){
   try{
@@ -1045,15 +1079,107 @@ function loadData(){
     var d=JSON.parse(raw);
     if(!d||!Array.isArray(d.items)||!Array.isArray(d.goals)||!d.logs)return false;
     items=d.items;logs=d.logs;goals=d.goals;nid=Number(d.nid)||100;
-    saveData();
+    localSaveData();
     try{localStorage.removeItem('trackyou-clean-v2-data')}catch(e){}
     return true;
   }catch(e){return false}
 }
 function clearSavedData(){
-  try{localStorage.removeItem(STORAGE_KEY)}catch(e){}
+  try{localStorage.removeItem(STORAGE_KEY);localStorage.removeItem('trackyou-clean-v2-data')}catch(e){}
 }
-/* Save whenever app state changes. */
+async function cloudSaveNow(){
+  if(!cloudUser||cloudSyncing)return;
+  cloudSyncing=true;
+  try{
+    var res=await supabaseClient.from('app_state').upsert({
+      user_id:cloudUser.id,
+      items:items,
+      logs:logs,
+      goals:goals,
+      nid:nid,
+      updated_at:new Date().toISOString()
+    },{onConflict:'user_id'});
+    if(res.error)console.error('tracKYOU cloud save:',res.error);
+  }catch(e){console.error('tracKYOU cloud save:',e)}
+  finally{cloudSyncing=false}
+}
+function queueCloudSave(){
+  clearTimeout(cloudTimer);
+  cloudTimer=setTimeout(cloudSaveNow,350);
+}
+async function cloudLoad(){
+  if(!cloudUser)return;
+  try{
+    var res=await supabaseClient.from('app_state').select('items,logs,goals,nid,updated_at').eq('user_id',cloudUser.id).maybeSingle();
+    if(res.error){console.error('tracKYOU cloud load:',res.error);toast('Cloud sync error — check Supabase permissions');return}
+    if(res.data){
+      items=Array.isArray(res.data.items)?res.data.items:[];
+      logs=res.data.logs&&typeof res.data.logs==='object'?res.data.logs:{};
+      goals=Array.isArray(res.data.goals)?res.data.goals:[];
+      nid=Number(res.data.nid)||100;
+      localSaveData();
+      render();
+      toast('Synced from cloud');
+    }else{
+      await cloudSaveNow();
+      toast('Cloud sync enabled');
+    }
+  }catch(e){console.error('tracKYOU cloud load:',e);toast('Could not connect to cloud')}
+}
+function startRealtime(){
+  if(cloudRealtime) supabaseClient.removeChannel(cloudRealtime);
+  cloudRealtime=supabaseClient.channel('trackyou-app-state')
+    .on('postgres_changes',{event:'*',schema:'public',table:'app_state',filter:'user_id=eq.'+cloudUser.id},function(payload){
+      if(payload.eventType==='DELETE')return;
+      var row=payload.new;
+      if(!row)return;
+      items=Array.isArray(row.items)?row.items:[];
+      logs=row.logs&&typeof row.logs==='object'?row.logs:{};
+      goals=Array.isArray(row.goals)?row.goals:[];
+      nid=Number(row.nid)||100;
+      localSaveData();
+      render();
+    })
+    .subscribe();
+}
+function showAuth(){
+  $('#authGate').hidden=false;
+}
+function hideAuth(){
+  $('#authGate').hidden=true;
+}
+async function signIn(){
+  var email=$('#authEmail').value.trim(),password=$('#authPassword').value;
+  var msg=$('#authMsg'),btn=$('#authLogin');
+  if(!email||!password){msg.textContent='Enter your email and password.';return}
+  btn.disabled=true;msg.textContent='Signing in…';
+  var res=await supabaseClient.auth.signInWithPassword({email:email,password:password});
+  if(res.error)msg.textContent=res.error.message;
+  else msg.textContent='Signed in.';
+  btn.disabled=false;
+}
+async function bootCloud(){
+  var res=await supabaseClient.auth.getSession();
+  if(res.data&&res.data.session){
+    cloudUser=res.data.session.user;
+    hideAuth();
+    await cloudLoad();
+    startRealtime();
+  }else showAuth();
+  supabaseClient.auth.onAuthStateChange(function(event,session){
+    if(event==='SIGNED_OUT'){
+      cloudUser=null;
+      if(cloudRealtime){supabaseClient.removeChannel(cloudRealtime);cloudRealtime=null}
+      showAuth();
+      return;
+    }
+    if(session&&session.user&&event==='SIGNED_IN'){
+      cloudUser=session.user;
+      hideAuth();
+      cloudLoad().then(startRealtime);
+    }
+  });
+}
 var _saveTimer=null;
 function persistSoon(){clearTimeout(_saveTimer);_saveTimer=setTimeout(saveData,0)}
 var _setLogOriginal=setLog;
@@ -1062,6 +1188,9 @@ var _mkOriginal=mk;
 mk=function(o){var out=_mkOriginal(o);persistSoon();return out};
 
 init(); if(!loadData()) saveData(); render();
+$('#authLogin').addEventListener('click',signIn);
+$('#authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')signIn()});
+bootCloud();
 window.addEventListener('resize',function(){if(!isMobile()){$('#scrim').classList.remove('on')}renderDay()});
 })();
 </script>
