@@ -1,5 +1,5 @@
-const CACHE = "trackyou-v1";
-const CORE = ["./","./index.html","./manifest.webmanifest","./icon-180.png","./icon-512.png"];
+const CACHE="trackyou-v3";
+const CORE=["./","./index.html","./manifest.webmanifest","./icon-180.png","./icon-512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)));
@@ -19,24 +19,22 @@ self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Always try the network first for HTML so GitHub Pages updates are visible.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const network = fetch(event.request).then(response => {
-        if (response && response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(event.request, copy));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || network;
-    })
+    fetch(event.request).then(response => {
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+      }
+      return response;
+    }).catch(() => caches.match(event.request))
   );
 });
 
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   event.waitUntil(
-    clients.matchAll({type: "window", includeUncontrolled: true}).then(list => {
+    clients.matchAll({type:"window", includeUncontrolled:true}).then(list => {
       for (const client of list) {
         if ("focus" in client) return client.focus();
       }
