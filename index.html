@@ -644,7 +644,7 @@ function detailHTML(){
   var body='';
   if(!trackable(it)){
     var d=diff(TODAY,s);
-    body='<div class="fld"><div class="kv"><span>When</span><span>'+dShort(s)+(it.start?' · '+t12(tm(it.start)):'')+'</span></div>'+(d>0?'<div class="kv"><span>Countdown</span><span class="num"><b>'+d+'</b> '+(d===1?'day':'days')+' left</span></div>':'')+(it.rem?'<div class="kv"><span>Reminders</span><span>'+it.rem.map(function(m){return m>=60?(m/60)+' h':m+' min'}).join(' and ')+' before</span></div>':'')+'</div>';
+    body='<div class="fld"><div class="kv"><span>When</span><span>'+dShort(s)+(it.start?' · '+t12(tm(it.start)):'')+'</span></div>'+(d>0?'<div class="kv"><span>Countdown</span><span class="num"><b>'+d+'</b> '+(d===1?'day':'days')+' left</span></div>':'')+(it.rem?'<div class="kv"><span>Reminders</span><span>1 hour before · 15 minutes before · at set time</span></div>':'')+'</div>';
   } else {
     var o=l?l.o:'unmarked';
     var canMark=st==='open'||(st==='closed'&&!l);
@@ -690,7 +690,7 @@ function detailHTML(){
   var mv='';
   if(st==='open'||st==='future'){
     mv='<div class="fld"><label for="mvd">Move to</label><div class="chiprow" style="margin-top:0"><input class="inp" style="flex:1;min-width:150px" id="mvd" type="date" value="'+s+'" min="'+TODAY+'"><button class="chip sm" data-act="tomorrow">Tomorrow</button><button class="chip sm" data-act="nextweek">Next week</button></div></div>'+
-       '<div class="btns"><button class="btn ghost danger" data-act="del">Delete</button></div>';
+       '<div class="btns">'+(it.kind==='reminder'?'<button class="btn sec" data-act="turnoff">Turn off reminders</button>':'')+'<button class="btn ghost danger" data-act="del">Delete</button></div>';
   }
   return '<div class="dp">'+head+body+mv+'</div>';
 }
@@ -843,7 +843,7 @@ function renderAdd(){
   }
   if(t==='reminder'){
     h+='<div class="chiprow">'+chipsDay+'<label class="chip in">🔔 <input type="time" id="a-time" value="'+a.time+'" aria-label="Time"></label></div>'+
-     '<div class="chiprow" role="group" aria-label="Notify">'+[[60,'1 hour before'],[15,'15 minutes before'],[0,'At set time']].map(function(x){return '<button class="chip" data-act="arem" data-v="'+x[0]+'" aria-pressed="'+(a.rem.indexOf(x[0])>-1)+'">'+x[1]+'</button>'}).join('')+'</div>';
+     '<div class="chiprow" role="group" aria-label="Notify">'+[[60,'1 hour before'],[15,'15 minutes before'],[0,'At set time']].map(function(x){return '<button class="chip" type="button" aria-pressed="true" disabled>'+x[1]+'</button>'}).join('')+'</div>';
   }
   if(t==='work'){
     h+='<div class="chiprow">'+chipsDay+'<label class="chip in">🕖 <input type="time" id="a-ws" value="'+a.wstart+'" aria-label="Start"></label><span>to</span><label class="chip in"><input type="time" id="a-we" value="'+a.wend+'" aria-label="End"></label></div><div class="hint" id="a-prev"></div>'+
@@ -884,7 +884,7 @@ function saveAdd(){
   var it={kind:a.type,title:title,date:a.date};
   if(a.type==='task'){it.pri=a.pri;it.cat='life';if(a.mode==='dur')it.dur=a.dur;else{it.start=a.start;it.end=a.end}}
   if(a.type==='event'){it.evType=a.ev;it.allDay=a.allDay;if(!a.allDay)it.start=a.time}
-  if(a.type==='reminder'){it.start=a.time;it.rem=a.rem.slice();it.notify=true}
+  if(a.type==='reminder'){it.start=a.time;it.rem=[60,15,0];it.notify=true}
   if(a.type==='work'){it.pri='important';it.cat='work';it.start=a.wstart;it.end=a.wend;it.wcat=title}
   if((a.type==='task'||a.type==='work')&&a.rec.length)it.rec=a.rec.slice();
   if(a.goal){it.goal=a.goal;if(a.type==='work')it.alloc=true}
@@ -1004,6 +1004,7 @@ document.addEventListener('click',function(ev){
    case 'sclose':$('#settings').classList.remove('on');break;
    case 'theme':{var k=el.getAttribute('data-k');try{localStorage.setItem('tk-theme',k)}catch(e){}applyTheme(k);renderSettings();break}
    case 'enable-push':enablePushNotifications();break;
+   case 'turnoff':{var rit=findItem(detail.id);if(rit&&rit.kind==='reminder'){rit.notify=false;cancelReminderNotifications(rit.id);persistSoon();refresh();toast('Reminders turned off')}}break;
    case 'signout':supabaseClient.auth.signOut();break
    case 'skipday':{TODAY=addDays(TODAY,1);NOWMIN=8*60;justPassed=addDays(TODAY,-1);sel=TODAY;view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};detail=null;$('#settings').classList.remove('on');render();
       toast(dLong(TODAY).split(', ')[1]+': '+dShort(addDays(TODAY,-1))+' is closed, '+dShort(addDays(TODAY,-2))+' is now locked');break}
@@ -1127,6 +1128,7 @@ async function cloudLoad(){
       nid=Number(res.data.nid)||100;
       localSaveData();
       render();
+      Promise.all(items.filter(function(x){return x.kind==='reminder'&&x.notify!==false}).map(queueReminderNotifications));
       toast('Synced from cloud');
     }else{
       await cloudSaveNow();
@@ -1150,7 +1152,7 @@ function startRealtime(){
     })
     .subscribe();
 }
-var NOTIFICATION_PUBLIC_KEY='';
+var NOTIFICATION_PUBLIC_KEY='BPWRM3B3WO8Wm_dTWlPQdfPxRYeVmjEydeZ1Pxzt9b8lN1FWNnTHknlCEFU2QRffqbYvahPT_K5ZLNhqjw1k2_4';
 function reminderFireTimes(it){
   if(!it||it.kind!=='reminder'||!it.date||!it.start)return [];
   return (it.rem||[]).map(function(offset){
