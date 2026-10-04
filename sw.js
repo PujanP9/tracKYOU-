@@ -31,6 +31,21 @@ self.addEventListener("fetch", event => {
   );
 });
 
+self.addEventListener("push", event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) {}
+  const title = data.title || "tracKYOU";
+  const options = {
+    body: data.body || "You have a reminder.",
+    icon: "./icon-180.png",
+    badge: "./icon-180.png",
+    tag: data.reminderId ? "trackyou-" + data.reminderId : "trackyou-reminder",
+    renotify: true,
+    data: { url: data.url || "./" }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 self.addEventListener("notificationclick", event => {
   event.notification.close();
   event.waitUntil(
@@ -38,7 +53,7 @@ self.addEventListener("notificationclick", event => {
       for (const client of list) {
         if ("focus" in client) return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow("./");
+      if (clients.openWindow) return clients.openWindow(event.notification.data?.url || "./");
     })
   );
 });
