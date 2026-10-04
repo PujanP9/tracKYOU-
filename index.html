@@ -1152,7 +1152,7 @@ function startRealtime(){
     })
     .subscribe();
 }
-var NOTIFICATION_PUBLIC_KEY='BPWRM3B3WO8Wm_dTWlPQdfPxRYeVmjEydeZ1Pxzt9b8lN1FWNnTHknlCEFU2QRffqbYvahPT_K5ZLNhqjw1k2_4';
+var NOTIFICATION_PUBLIC_KEY='REPLACE_WITH_VAPID_PUBLIC_KEY';
 function reminderFireTimes(it){
   if(!it||it.kind!=='reminder'||!it.date||!it.start)return [];
   return (it.rem||[]).map(function(offset){
