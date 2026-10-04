@@ -1180,17 +1180,36 @@ function urlBase64ToUint8Array(base64String){
   var raw=atob(base64);var out=new Uint8Array(raw.length);for(var i=0;i<raw.length;++i)out[i]=raw.charCodeAt(i);return out;
 }
 async function enablePushNotifications(){
+  if(!cloudUser){toast('Please sign in first');return}
   if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){toast('Push notifications are not supported here');return}
   if(!NOTIFICATION_PUBLIC_KEY){toast('Push setup is not configured yet');return}
-  var permission=Notification.permission;
-  if(permission!=='granted')permission=await Notification.requestPermission();
-  if(permission!=='granted'){toast('Notifications were not allowed');return}
-  var reg=await navigator.serviceWorker.ready;
-  var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(NOTIFICATION_PUBLIC_KEY)});
-  var json=sub.toJSON();
-  var res=await supabaseClient.from('push_subscriptions').upsert({user_id:cloudUser.id,endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
-  if(res.error){console.error(res.error);toast('Could not save notification permission');return}
-  toast('Notifications enabled');
+  try{
+    var permission=Notification.permission;
+    if(permission!=='granted')permission=await Notification.requestPermission();
+    if(permission!=='granted'){toast('Notifications were not allowed');return}
+    var reg=await navigator.serviceWorker.ready;
+    var key=urlBase64ToUint8Array(NOTIFICATION_PUBLIC_KEY);
+    var sub=await reg.pushManager.getSubscription();
+    if(sub){
+      try{
+        var oldJson=sub.toJSON();
+        if(oldJson&&oldJson.options&&oldJson.options.applicationServerKey){
+          sub=await sub.unsubscribe()?null:sub;
+        }else{
+          sub=await sub.unsubscribe()?null:sub;
+        }
+      }catch(e){console.warn('old push subscription:',e);sub=null}
+    }
+    sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+    var json=sub.toJSON();
+    if(!json||!json.endpoint||!json.keys){throw new Error('Push subscription did not return valid keys')}
+    var res=await supabaseClient.from('push_subscriptions').upsert({user_id:cloudUser.id,endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
+    if(res.error){console.error('push subscription save:',res.error);toast('Could not save notification permission: '+res.error.message);return}
+    toast('Notifications enabled');
+  }catch(e){
+    console.error('enable push:',e);
+    toast('Notification setup failed: '+(e&&e.message?e.message:'Unknown error'));
+  }
 }
 function showAuth(){
   $('#authGate').hidden=false;
