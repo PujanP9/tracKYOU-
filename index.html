@@ -18,6 +18,8 @@
 .auth-input:focus{border-color:var(--should);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
 .auth-btn{width:100%;border:0;border-radius:12px;padding:13px 16px;margin-top:8px;background:var(--ink);color:var(--on-ink);font:600 15px var(--body);cursor:pointer}
 .auth-btn:disabled{opacity:.6;cursor:wait}
+.auth-switch{display:block;width:100%;margin-top:12px;padding:10px 8px;color:var(--ink2);font-size:14px}
+.auth-switch b{color:var(--ink);font-weight:700}
 .auth-msg{min-height:20px;margin-top:12px;font-size:13px;color:var(--ink2)}
 </style>
 </head><body>
@@ -348,11 +350,14 @@ h1,h2,h3{font-family:var(--display);margin:0;font-weight:700;letter-spacing:-.02
 <div id="authGate" class="auth-gate" hidden>
   <div class="auth-card">
     <div class="wordmark auth-brand">trac<b>KYOU</b></div>
-    <div class="auth-title">Sign in to tracKYOU</div>
-    <p class="auth-copy">Your tasks, goals and reminders will sync across your devices.</p>
+    <div class="auth-title" id="authTitle">Sign in to tracKYOU</div>
+    <p class="auth-copy" id="authCopy">Your tasks, goals and reminders will sync across your devices.</p>
+    <label class="auth-label" id="authNameWrap" hidden>Name<input id="authName" class="auth-input" type="text" autocomplete="name" placeholder="Your name"></label>
     <label class="auth-label">Email<input id="authEmail" class="auth-input" type="email" autocomplete="email" placeholder="you@example.com"></label>
-    <label class="auth-label">Password<input id="authPassword" class="auth-input" type="password" autocomplete="current-password" placeholder="Password"></label>
+    <label class="auth-label">Password<input id="authPassword" class="auth-input" type="password" autocomplete="new-password" placeholder="Password"></label>
+    <label class="auth-label" id="authConfirmWrap" hidden>Confirm password<input id="authConfirm" class="auth-input" type="password" autocomplete="new-password" placeholder="Confirm password"></label>
     <button id="authLogin" class="auth-btn" type="button">Sign in</button>
+    <button id="authMode" class="auth-switch" type="button">New here? <b>Sign up</b></button>
     <div id="authMsg" class="auth-msg" aria-live="polite"></div>
   </div>
 </div>
@@ -592,7 +597,7 @@ function evRowHTML(it,s){
   if(it.kind==='reminder')e=['🔔','Reminder'];
   var d=diff(TODAY,s),cd=d>0?'<span class="cd"><b class="num">'+d+'</b> '+(d===1?'day':'days')+' left</span>':d===0?'<span class="cd"><b>Today</b></span>':'';
   var sub=it.start?t12(tm(it.start)):it.allDay?'All day':'';
-  if(it.kind==='reminder'&&it.rem)sub+=(sub?' · ':'')+'Reminds '+it.rem.map(function(m){return m>=60?(m/60)+' h':m+' min'}).join(' and ')+' before';
+  if(it.kind==='reminder'&&it.rem){var rr=it.rem.slice().sort(function(a,b){return b-a});sub+=(sub?' · ':'')+'Reminds '+rr.map(function(m){return m===0?'at set time':m>=60?(m/60)+' h before':m+' min before'}).join(', ');}
   return '<button class="erow" data-act="open" data-id="'+it.id+'" data-date="'+s+'"><span class="em" aria-hidden="true">'+e[0]+'</span><span style="min-width:0"><span class="rt" style="display:block">'+esc(it.title)+'</span><span class="rm" style="display:block">'+e[1]+(sub?' · '+sub:'')+'</span></span>'+cd+'</button>';
 }
 function weekIncome(s){
@@ -815,7 +820,7 @@ function renderSearch(){
 
 /* ---------- add sheet ---------- */
 function newAdd(type,date){
-  return {type:type||'task',title:'',date:date||sel>=TODAY?(date||sel):TODAY,mode:'dur',dur:60,start:'09:00',end:'10:00',pri:'should',ev:'birthday',allDay:true,wstart:'19:00',wend:'23:00',hasInc:false,inc:'',rec:[],more:false,goal:'',rem:[60,15],metric:'money',target:'',deadline:'',time:'09:00'};
+  return {type:type||'task',title:'',date:date||sel>=TODAY?(date||sel):TODAY,mode:'dur',dur:60,start:'09:00',end:'10:00',pri:'should',ev:'birthday',allDay:true,wstart:'19:00',wend:'23:00',hasInc:false,inc:'',rec:[],more:false,goal:'',rem:[60,15,0],metric:'money',target:'',deadline:'',time:'09:00'};
 }
 function renderAdd(){
   var a=addS,t=a.type;
@@ -838,7 +843,7 @@ function renderAdd(){
   }
   if(t==='reminder'){
     h+='<div class="chiprow">'+chipsDay+'<label class="chip in">🔔 <input type="time" id="a-time" value="'+a.time+'" aria-label="Time"></label></div>'+
-     '<div class="chiprow" role="group" aria-label="Notify">'+[[60,'1 hour before'],[15,'15 minutes before']].map(function(x){return '<button class="chip" data-act="arem" data-v="'+x[0]+'" aria-pressed="'+(a.rem.indexOf(x[0])>-1)+'">'+x[1]+'</button>'}).join('')+'</div>';
+     '<div class="chiprow" role="group" aria-label="Notify">'+[[60,'1 hour before'],[15,'15 minutes before'],[0,'At set time']].map(function(x){return '<button class="chip" data-act="arem" data-v="'+x[0]+'" aria-pressed="'+(a.rem.indexOf(x[0])>-1)+'">'+x[1]+'</button>'}).join('')+'</div>';
   }
   if(t==='work'){
     h+='<div class="chiprow">'+chipsDay+'<label class="chip in">🕖 <input type="time" id="a-ws" value="'+a.wstart+'" aria-label="Start"></label><span>to</span><label class="chip in"><input type="time" id="a-we" value="'+a.wend+'" aria-label="End"></label></div><div class="hint" id="a-prev"></div>'+
@@ -879,11 +884,12 @@ function saveAdd(){
   var it={kind:a.type,title:title,date:a.date};
   if(a.type==='task'){it.pri=a.pri;it.cat='life';if(a.mode==='dur')it.dur=a.dur;else{it.start=a.start;it.end=a.end}}
   if(a.type==='event'){it.evType=a.ev;it.allDay=a.allDay;if(!a.allDay)it.start=a.time}
-  if(a.type==='reminder'){it.start=a.time;it.rem=a.rem.slice()}
+  if(a.type==='reminder'){it.start=a.time;it.rem=a.rem.slice();it.notify=true}
   if(a.type==='work'){it.pri='important';it.cat='work';it.start=a.wstart;it.end=a.wend;it.wcat=title}
   if((a.type==='task'||a.type==='work')&&a.rec.length)it.rec=a.rec.slice();
   if(a.goal){it.goal=a.goal;if(a.type==='work')it.alloc=true}
   var m=mk(it);
+  if(a.type==='reminder')queueReminderNotifications(m);
   if(a.type==='work'&&a.hasInc&&parseFloat(a.inc)>0&&a.date<=TODAY){setLog(m,a.date,{o:'done',income:parseFloat(a.inc)})}
   sel=a.date;var d=D(a.date);view={y:d.getFullYear(),m:d.getMonth()};
   persistSoon();closeAdd();if(screen!=='cal'&&screen!=='today')screen='cal';
@@ -899,7 +905,7 @@ function renderSettings(){
   $('#settings').innerHTML='<div class="msheet"><div class="grab"></div><div class="bar"><div class="grow wordmark" aria-label="tracKYOU">trac<b>KYOU</b></div><button class="ibtn" data-act="sclose" aria-label="Close">'+ic.x+'</button></div>'+
    '<div class="fld"><div class="lb">Appearance</div><div class="seg" role="group" aria-label="Theme">'+[['light','Light'],['dark','Dark'],['system','System']].map(function(x){return '<button data-act="theme" data-k="'+x[0]+'" aria-pressed="'+(th===x[0])+'">'+x[1]+'</button>'}).join('')+'</div></div>'+
    '<div class="fld"><div class="lb">Priority colours</div>'+['must','important','should'].map(function(p){var v='--'+(p==='important'?'imp':p);return '<div class="swrow"><span style="display:flex;align-items:center;gap:10px"><span class="shape '+PRI[p].cls+'"></span>'+PRI[p].n+'</span><input type="color" data-var="'+v+'" value="'+col(v)+'" aria-label="'+PRI[p].n+' colour"></div>'}).join('')+'</div>'+
-   '<div class="fld"><div class="lb">Cloud sync</div><div class="kv"><span>Account</span><span>'+esc(cloudUser?cloudUser.email:'Not signed in')+'</span></div><div class="btns"><button class="btn ghost" data-act="signout"'+(cloudUser?'':' disabled')+'>Sign out</button></div></div>'+'<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
+   '<div class="fld"><div class="lb">Cloud sync</div><div class="kv"><span>Account</span><span>'+esc(cloudUser?cloudUser.email:'Not signed in')+'</span></div><div class="btns"><button class="btn sec" data-act="enable-push"'+(cloudUser?'':' disabled')+'>Enable notifications</button><button class="btn ghost" data-act="signout"'+(cloudUser?'':' disabled')+'>Sign out</button></div></div>'+'<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
    '<div class="fld"><div class="lb">Prototype controls</div><p class="hint" style="margin-top:0">Time is fixed at '+dLong(T0)+', 8:58 PM so every state is visible. Skip ahead to watch days close and lock.</p><div class="btns"><button class="btn sec" data-act="skipday">Skip to next morning</button><button class="btn ghost" data-act="reset">Reset demo</button></div></div></div>';
 }
 
@@ -972,6 +978,7 @@ document.addEventListener('click',function(ev){
    case 'nextweek':moveItem(findItem(detail.id),detail.date,addDays(detail.date,7));break;
    case 'del':{var it4=findItem(detail.id),s4=detail.date,bk=JSON.parse(JSON.stringify(it4));
       if(it4.rec){it4.ex=(it4.ex||[]).concat([s4])}else items=items.filter(function(x){return x!==it4});
+      if(it4.kind==='reminder')cancelReminderNotifications(it4.id);
       detail=null;persistSoon();refresh();toast('Deleted',function(){if(it4.rec){it4.ex=it4.ex.filter(function(x){return x!==s4})}else items.push(it4);refresh()});break}
    case 'corr-open':corr=true;renderDay();break;
    case 'corr-save':{var it5=findItem(detail.id),s5=detail.date,o5=el.getAttribute('data-o'),cur5=L(it5,s5),prev=cur5?cur5.o:'unmarked';
@@ -996,6 +1003,7 @@ document.addEventListener('click',function(ev){
    case 'settings':renderSettings();$('#settings').classList.add('on');break;
    case 'sclose':$('#settings').classList.remove('on');break;
    case 'theme':{var k=el.getAttribute('data-k');try{localStorage.setItem('tk-theme',k)}catch(e){}applyTheme(k);renderSettings();break}
+   case 'enable-push':enablePushNotifications();break;
    case 'signout':supabaseClient.auth.signOut();break
    case 'skipday':{TODAY=addDays(TODAY,1);NOWMIN=8*60;justPassed=addDays(TODAY,-1);sel=TODAY;view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};detail=null;$('#settings').classList.remove('on');render();
       toast(dLong(TODAY).split(', ')[1]+': '+dShort(addDays(TODAY,-1))+' is closed, '+dShort(addDays(TODAY,-2))+' is now locked');break}
@@ -1142,11 +1150,64 @@ function startRealtime(){
     })
     .subscribe();
 }
+var NOTIFICATION_PUBLIC_KEY='';
+function reminderFireTimes(it){
+  if(!it||it.kind!=='reminder'||!it.date||!it.start)return [];
+  return (it.rem||[]).map(function(offset){
+    var base=new Date(it.date+'T'+it.start+':00');
+    return {offset:offset,at:new Date(base.getTime()-offset*60000)};
+  }).filter(function(x){return x.at.getTime()>Date.now()-60000});
+}
+async function queueReminderNotifications(it){
+  if(!cloudUser||!it||it.kind!=='reminder')return;
+  try{
+    await supabaseClient.from('notification_queue').delete().eq('user_id',cloudUser.id).eq('reminder_id',it.id);
+    var rows=reminderFireTimes(it).map(function(x){
+      var label=x.offset===0?'Time to '+it.title:x.offset===60?it.title+' in 1 hour':it.title+' in 15 minutes';
+      return {user_id:cloudUser.id,reminder_id:it.id,title:'tracKYOU',body:label,send_at:x.at.toISOString(),status:'pending'};
+    });
+    if(rows.length)await supabaseClient.from('notification_queue').insert(rows);
+  }catch(e){console.error('notification queue:',e)}
+}
+async function cancelReminderNotifications(reminderId){
+  if(!cloudUser||!reminderId)return;
+  try{await supabaseClient.from('notification_queue').delete().eq('user_id',cloudUser.id).eq('reminder_id',reminderId)}catch(e){console.error('notification cancel:',e)}
+}
+function urlBase64ToUint8Array(base64String){
+  var padding='='.repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  var raw=atob(base64);var out=new Uint8Array(raw.length);for(var i=0;i<raw.length;++i)out[i]=raw.charCodeAt(i);return out;
+}
+async function enablePushNotifications(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){toast('Push notifications are not supported here');return}
+  if(!NOTIFICATION_PUBLIC_KEY){toast('Push setup is not configured yet');return}
+  var permission=Notification.permission;
+  if(permission!=='granted')permission=await Notification.requestPermission();
+  if(permission!=='granted'){toast('Notifications were not allowed');return}
+  var reg=await navigator.serviceWorker.ready;
+  var sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(NOTIFICATION_PUBLIC_KEY)});
+  var json=sub.toJSON();
+  var res=await supabaseClient.from('push_subscriptions').upsert({user_id:cloudUser.id,endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
+  if(res.error){console.error(res.error);toast('Could not save notification permission');return}
+  toast('Notifications enabled');
+}
 function showAuth(){
   $('#authGate').hidden=false;
 }
 function hideAuth(){
   $('#authGate').hidden=true;
+}
+var authMode='signin';
+function setAuthMode(mode){
+  authMode=mode;
+  var signup=mode==='signup';
+  $('#authTitle').textContent=signup?'Create your tracKYOU account':'Sign in to tracKYOU';
+  $('#authCopy').textContent=signup?'Create an account to keep your tasks, goals and reminders synced across devices.':'Your tasks, goals and reminders will sync across your devices.';
+  $('#authNameWrap').hidden=!signup;
+  $('#authConfirmWrap').hidden=!signup;
+  $('#authPassword').autocomplete=signup?'new-password':'current-password';
+  $('#authLogin').textContent=signup?'Create account':'Sign in';
+  $('#authMode').innerHTML=signup?'Already have an account? <b>Sign in</b>':'New here? <b>Sign up</b>';
+  $('#authMsg').textContent='';
 }
 async function signIn(){
   var email=$('#authEmail').value.trim(),password=$('#authPassword').value;
@@ -1158,6 +1219,26 @@ async function signIn(){
   else msg.textContent='Signed in.';
   btn.disabled=false;
 }
+async function signUp(){
+  var email=$('#authEmail').value.trim(),password=$('#authPassword').value,confirm=$('#authConfirm').value,name=$('#authName').value.trim();
+  var msg=$('#authMsg'),btn=$('#authLogin');
+  if(!name){msg.textContent='Enter your name.';return}
+  if(!email||!password){msg.textContent='Enter your email and password.';return}
+  if(password.length<6){msg.textContent='Password must be at least 6 characters.';return}
+  if(password!==confirm){msg.textContent='Passwords do not match.';return}
+  btn.disabled=true;msg.textContent='Creating your account…';
+  var res=await supabaseClient.auth.signUp({email:email,password:password,options:{data:{full_name:name}}});
+  if(res.error){msg.textContent=res.error.message;btn.disabled=false;return}
+  if(res.data&&res.data.session){
+    msg.textContent='Account created. Signing you in…';
+  }else{
+    msg.textContent='Account created. Check your email to confirm, then sign in.';
+    setAuthMode('signin');
+    $('#authEmail').value=email;
+  }
+  btn.disabled=false;
+}
+
 async function bootCloud(){
   var res=await supabaseClient.auth.getSession();
   if(res.data&&res.data.session){
@@ -1188,8 +1269,9 @@ var _mkOriginal=mk;
 mk=function(o){var out=_mkOriginal(o);persistSoon();return out};
 
 init(); if(!loadData()) saveData(); render();
-$('#authLogin').addEventListener('click',signIn);
-$('#authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')signIn()});
+$('#authLogin').addEventListener('click',function(){authMode==='signup'?signUp():signIn()});
+$('#authMode').addEventListener('click',function(){setAuthMode(authMode==='signup'?'signin':'signup')});
+$('#authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')authMode==='signup'?signUp():signIn()});
 bootCloud();
 window.addEventListener('resize',function(){if(!isMobile()){$('#scrim').classList.remove('on')}renderDay()});
 })();
