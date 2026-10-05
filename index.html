@@ -819,6 +819,21 @@ function goalManualValue(g){
   var v=Object.prototype.hasOwnProperty.call(goalDraft,g.id)?goalDraft[g.id]:(g.manual||0);
   return Math.max(0,Math.min(g.target,Math.round(Number(v)||0)));
 }
+function goalManualStep(g){
+  if(g.metric==='minutes')return 5;
+  if(g.metric==='money')return 10;
+  return 1;
+}
+function goalManualLabel(g){
+  if(g.metric==='minutes')return 'Add time worked';
+  if(g.metric==='money')return 'Add money earned';
+  return 'Add items completed';
+}
+function goalManualDisplay(g,v){
+  if(g.metric==='minutes')return durText(v);
+  if(g.metric==='money')return money(v);
+  return Math.round(v)+' '+g.unit;
+}
 function showGoalCompletion(g){
   completingGoalId=g.id;
   $('#goalCompleteTitle').textContent='Congratulations! 🎉🎊';
@@ -855,7 +870,7 @@ function saveGoalProgress(id){
   g.manual=v;
   delete goalDraft[id];
   persistSoon();
-  if(g.metric==='minutes' && v>=g.target){
+  if(v>=g.target){
     showGoalCompletion(g);
     return;
   }
@@ -874,7 +889,7 @@ function renderGoals(){
     var ex=open[g.id];
     var cl=ex?'<div class="contr"><div class="eyebrow" style="margin:4px 0 2px">Recent contributions</div>'+
       (contribList(g).map(function(c){return '<div><span>'+dShort(c.s)+' · '+esc(c.t)+'</span><b class="num">+'+(g.metric==='money'?money(c.c):g.metric==='minutes'?c.c+' min':c.c)+'</b></div>'}).join('')||'<div><span>Nothing yet</span></div>')+
-      (g.metric==='minutes'?'<div class="goal-tools"><div class="eyebrow" style="margin-bottom:6px">Add time worked</div><div class="goal-slider-row"><input type="range" min="0" max="'+g.target+'" step="5" value="'+goalManualValue(g)+'" data-goal-slider="'+g.id+'" aria-label="Time worked for '+esc(g.title)+'"><span class="goal-slider-value num" id="gsv-'+g.id+'">'+durText(goalManualValue(g))+'</span></div><button class="btn goal-save" data-act="gsave" data-id="'+g.id+'">Save progress</button></div>':'')+
+      '<div class="goal-tools"><div class="eyebrow" style="margin-bottom:6px">'+goalManualLabel(g)+'</div><div class="goal-slider-row"><input type="range" min="0" max="'+g.target+'" step="'+goalManualStep(g)+'" value="'+goalManualValue(g)+'" data-goal-slider="'+g.id+'" aria-label="'+esc(goalManualLabel(g))+' for '+esc(g.title)+'"><span class="goal-slider-value num" id="gsv-'+g.id+'">'+goalManualDisplay(g,goalManualValue(g))+'</span></div><button class="btn goal-save" data-act="gsave" data-id="'+g.id+'">Save progress</button></div>'+
       '<div class="btns"><button class="btn danger ghost goal-delete" data-act="gdelete" data-id="'+g.id+'">Delete goal</button></div>'+
       '</div>':'';
     h+='<div class="goal" data-goal-id="'+g.id+'" style="--gc:var('+g.color+')"><button data-act="gtoggle" data-id="'+g.id+'" style="width:100%;text-align:left" aria-expanded="'+!!ex+'"><div class="gt">'+esc(g.title)+'</div>'+
@@ -1160,9 +1175,10 @@ document.addEventListener('input',function(ev){
   if(t.getAttribute&&t.getAttribute('data-goal-slider')){
     var gid=t.getAttribute('data-goal-slider'),g=goals.filter(function(x){return x.id===gid})[0];
     if(g){
-      var v=Math.max(0,Math.min(g.target,Math.round(+t.value/5)*5));
+      var step=goalManualStep(g);
+      var v=Math.max(0,Math.min(g.target,Math.round(+t.value/step)*step));
       goalDraft[gid]=v;
-      var out=$('#gsv-'+gid);if(out)out.textContent=durText(v);
+      var out=$('#gsv-'+gid);if(out)out.textContent=goalManualDisplay(g,v);
     }
     return;
   }
