@@ -550,6 +550,45 @@ function upcomingHTML(n){
   if(!u.length)return '';
   return '<div class="upc" aria-label="Upcoming">'+u.map(function(x){return '<button class="uc" data-act="pick-go" data-date="'+x.date+'"><span class="em" aria-hidden="true">'+x.em+'</span><span style="min-width:0"><span class="un" style="display:block">'+esc(x.name)+'</span><span class="ud"><b class="num">'+x.d+'</b> '+(x.d===1?'day':'days')+' left</span></span></button>'}).join('')+'</div>';
 }
+function todayHomeHTML(){
+  var todayItems=occ(TODAY).sort(sortIt);
+  var todayGoals=goals.filter(function(g){return g.deadline===TODAY});
+  if(!todayItems.length&&!todayGoals.length)return '';
+
+  var cards=todayGoals.map(function(g){
+    var v=gVal(g),pc=Math.min(100,Math.round(v/g.target*100));
+    return '<button class="uc" data-act="nav" data-id="goals">'+
+      '<span class="em" aria-hidden="true">'+(g.metric==='money'?'💰':'🎯')+'</span>'+
+      '<span style="min-width:0"><span class="un" style="display:block">'+esc(g.short||g.title)+'</span>'+
+      '<span class="ud"><b class="num">'+pc+'%</b> · Due today</span></span></button>';
+  }).join('');
+
+  cards+=todayItems.map(function(it){
+    var l=L(it,TODAY),meta='';
+    if(it.kind==='work'&&it.start&&it.end)meta=rng(it.start,it.end);
+    else if(it.start)meta=t12(tm(it.start));
+    else if(it.kind==='event')meta=(EV[it.evType||'special']||['✨','Event'])[1];
+    else if(it.kind==='reminder')meta='Reminder';
+
+    var status='';
+    if(l&&l.o==='done')status='Done';
+    else if(it.pri&&PRI[it.pri])status=PRI[it.pri].n;
+    else if(it.kind==='work')status='Work';
+    else if(it.kind==='event')status=(EV[it.evType||'special']||['✨','Event'])[1];
+    else if(it.kind==='reminder')status='Reminder';
+    else status='Task';
+
+    var em=it.kind==='work'?'💼':it.kind==='reminder'?'🔔':it.kind==='event'?(EV[it.evType||'special']||['✨','Event'])[0]:'☑️';
+    return '<button class="uc" data-act="open" data-id="'+it.id+'" data-date="'+TODAY+'">'+
+      '<span class="em" aria-hidden="true">'+em+'</span>'+
+      '<span style="min-width:0"><span class="un" style="display:block">'+esc(it.title)+'</span>'+
+      '<span class="ud">'+(meta?'<b class="num">'+esc(meta)+'</b> · ':'')+esc(status)+'</span></span></button>';
+  }).join('');
+
+  return '<div class="sec-h today-home"><span class="eyebrow">Today</span><span class="eyebrow">'+(todayItems.length+todayGoals.length)+' item'+(todayItems.length+todayGoals.length===1?'':'s')+'</span></div>'+
+    '<div class="upc" aria-label="Today">'+cards+'</div>';
+}
+
 function renderCal(){
   var first=S(new Date(view.y,view.m,1)),start=addDays(first,-dow(first)),cells='';
   for(var i=0;i<42;i++){var s=addDays(start,i);cells+=cellHTML(s,D(s).getMonth()===view.m)}
@@ -561,6 +600,7 @@ function renderCal(){
    '<button class="ibtn" data-act="settings" aria-label="Settings">'+ic.gear+'</button></div>'+
    '<div class="mstats"><span>Work <b class="num">'+durText(ms.mins).replace(' min','m')+'</b></span><span>Income <b class="num">'+money(ms.inc)+'</b></span></div>'+
    '<div role="grid" aria-labelledby="mt"><div class="wk" role="row">'+WD.map(function(w){return '<div role="columnheader">'+w+'</div>'}).join('')+'</div><div class="grid" id="grid">'+cells+'</div></div>'+
+   todayHomeHTML()+
    '<div class="sec-h"><span class="eyebrow">Upcoming</span></div>'+upcomingHTML(5);
   justPassed=null;
 }
@@ -741,7 +781,12 @@ function contribList(g){
 }
 function renderGoals(){
   var h='<div class="bar"><div class="grow"><div class="eyebrow">Goals</div><h1 class="h-title">What you’re working toward</h1></div><button class="ibtn" data-act="settings" aria-label="Settings">'+ic.gear+'</button></div><div class="goals">';
-  goals.forEach(function(g){
+  var orderedGoals=goals.slice().sort(function(a,b){
+    var ad=a.deadline?diff(TODAY,a.deadline):1e9;
+    var bd=b.deadline?diff(TODAY,b.deadline):1e9;
+    return ad-bd;
+  });
+  orderedGoals.forEach(function(g){
     var v=gVal(g),pc=Math.min(100,Math.round(v/g.target*100)),rem=Math.max(0,g.target-v);
     var dl=g.deadline?diff(TODAY,g.deadline):null;
     var ex=open[g.id];
