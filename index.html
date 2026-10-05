@@ -279,7 +279,24 @@ h1,h2,h3{font-family:var(--display);margin:0;font-weight:700;letter-spacing:-.02
 .contr{margin-top:14px;border-top:1px solid var(--line);padding-top:8px}
 .contr div{display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:14px}
 .contr span:first-child{color:var(--ink2)}
-
+.goal-tools{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.goal-slider-row{display:flex;align-items:center;gap:10px}
+.goal-slider-row input[type=range]{flex:1;min-width:0;accent-color:var(--gc,var(--teal));height:34px}
+.goal-slider-value{min-width:72px;text-align:right;font-family:var(--display);font-weight:700}
+.goal-save{margin-top:10px;width:100%}
+.goal-delete{margin-top:10px;width:100%}
+.goal-complete{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:24px;background:rgba(15,17,22,.5);backdrop-filter:blur(8px)}
+.goal-complete.on{display:flex}
+.goal-complete-card{width:min(420px,100%);padding:28px 24px;border-radius:24px;background:var(--surface);box-shadow:var(--shadow);text-align:center;animation:goalCelebrate .28s cubic-bezier(.2,.8,.2,1)}
+.goal-complete-card h2{font-size:28px;margin-top:8px}
+.goal-complete-card p{color:var(--ink2);line-height:1.5;margin:10px 0 20px}
+.goal-complete-stars{font-size:32px;letter-spacing:3px;color:var(--gold)}
+.goal-complete-actions{display:flex;justify-content:center}
+.goal-complete-actions .btn{min-width:150px}
+.goal.fade-away{animation:goalFadeAway .5s ease forwards}
+@keyframes goalCelebrate{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes goalFadeAway{to{opacity:0;transform:scale(.97);height:0;margin:0;padding-top:0;padding-bottom:0;border-width:0;overflow:hidden}}
+@media (prefers-reduced-motion:reduce){.goal.fade-away{animation:none;opacity:0}}
 /* ---------- search ---------- */
 .sf{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 16px;border-radius:16px;background:var(--surface);border:1.5px solid var(--line);margin-top:16px}
 .sf:focus-within{border-color:var(--ink)}
@@ -346,6 +363,14 @@ h1,h2,h3{font-family:var(--display);margin:0;font-weight:700;letter-spacing:-.02
 <div id="scrim"></div>
 <div class="modal" id="add" role="dialog" aria-modal="true" aria-label="Add something"></div>
 <div class="modal" id="settings" role="dialog" aria-modal="true" aria-label="Settings"></div>
+<div class="goal-complete" id="goalComplete" role="dialog" aria-modal="true" aria-labelledby="goalCompleteTitle">
+  <div class="goal-complete-card">
+    <div class="goal-complete-stars">★★★★★</div>
+    <h2 id="goalCompleteTitle">Congratulations! 🎉🎊</h2>
+    <p id="goalCompleteCopy"></p>
+    <div class="goal-complete-actions"><button class="btn" id="goalCompleteConfirm" type="button">Confirm</button></div>
+  </div>
+</div>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="authGate" class="auth-gate" hidden>
   <div class="auth-card">
@@ -399,6 +424,8 @@ var items=[],logs={},goals=[],nid=100,undoFn=null,toastTimer=null,justPassed=nul
 var srch={q:'Uber',type:'all',when:'any',inc:false,goal:''};
 var open={};
 var addS=null;
+var goalDraft={};
+var completingGoalId=null;
 
 var CATS={work:{n:'Work',c:'--teal'},study:{n:'Study',c:'--purple'},health:{n:'Health',c:'--green'},home:{n:'Home',c:'--pink'},life:{n:'Life',c:'--yellow'}};
 var PRI={must:{n:'Must do',cls:'must',o:0},important:{n:'Important',cls:'imp',o:1},should:{n:'Should do',cls:'should',o:2}};
@@ -779,6 +806,61 @@ function contribList(g){
   });
   return out.sort(function(a,b){return a.s<b.s?1:-1}).slice(0,5);
 }
+var GOAL_AFFIRMATIONS=[
+  'You showed up and got it done.',
+  'Small progress, big result.',
+  'You kept your promise to yourself.',
+  'That is another win in the bank.',
+  'Consistency is what builds the result.',
+  'You should be proud of that one.'
+];
+function randomAffirmation(){return GOAL_AFFIRMATIONS[Math.floor(Math.random()*GOAL_AFFIRMATIONS.length)]}
+function goalManualValue(g){
+  var v=Object.prototype.hasOwnProperty.call(goalDraft,g.id)?goalDraft[g.id]:(g.manual||0);
+  return Math.max(0,Math.min(g.target,Math.round(Number(v)||0)));
+}
+function showGoalCompletion(g){
+  completingGoalId=g.id;
+  $('#goalCompleteTitle').textContent='Congratulations! 🎉🎊';
+  $('#goalCompleteCopy').innerHTML='You have completed the goal of <b>“'+esc(g.title)+'”</b>.<br>'+esc(randomAffirmation());
+  $('#goalComplete').classList.add('on');
+}
+function finishGoal(){
+  var id=completingGoalId,g=goals.filter(function(x){return x.id===id})[0];
+  if(!g){$('#goalComplete').classList.remove('on');completingGoalId=null;return}
+  $('#goalComplete').classList.remove('on');
+  var card=$('.goal[data-goal-id="'+id+'"]');
+  if(card)card.classList.add('fade-away');
+  setTimeout(function(){
+    goals=goals.filter(function(x){return x.id!==id});
+    delete goalDraft[id];
+    completingGoalId=null;
+    persistSoon();
+    renderGoals();
+  },500);
+}
+function deleteGoal(id){
+  var g=goals.filter(function(x){return x.id===id})[0];
+  if(!g)return;
+  goals=goals.filter(function(x){return x.id!==id});
+  delete goalDraft[id];
+  persistSoon();
+  renderGoals();
+  toast('Deleted goal: '+g.title);
+}
+function saveGoalProgress(id){
+  var g=goals.filter(function(x){return x.id===id})[0];
+  if(!g)return;
+  var v=goalManualValue(g);
+  g.manual=v;
+  delete goalDraft[id];
+  persistSoon();
+  if(g.metric==='minutes' && v>=g.target){
+    showGoalCompletion(g);
+    return;
+  }
+  renderGoals();
+}
 function renderGoals(){
   var h='<div class="bar"><div class="grow"><div class="eyebrow">Goals</div><h1 class="h-title">What you’re working toward</h1></div><button class="ibtn" data-act="settings" aria-label="Settings">'+ic.gear+'</button></div><div class="goals">';
   var orderedGoals=goals.slice().sort(function(a,b){
@@ -787,19 +869,22 @@ function renderGoals(){
     return ad-bd;
   });
   orderedGoals.forEach(function(g){
-    var v=gVal(g),pc=Math.min(100,Math.round(v/g.target*100)),rem=Math.max(0,g.target-v);
+    var v=gVal(g),pc=g.target?Math.min(100,Math.round(v/g.target*100)):0,rem=Math.max(0,g.target-v);
     var dl=g.deadline?diff(TODAY,g.deadline):null;
     var ex=open[g.id];
     var cl=ex?'<div class="contr"><div class="eyebrow" style="margin:4px 0 2px">Recent contributions</div>'+
       (contribList(g).map(function(c){return '<div><span>'+dShort(c.s)+' · '+esc(c.t)+'</span><b class="num">+'+(g.metric==='money'?money(c.c):g.metric==='minutes'?c.c+' min':c.c)+'</b></div>'}).join('')||'<div><span>Nothing yet</span></div>')+
-      (g.manualOnly?'<div class="btns"><button class="btn sec" data-act="gplus" data-id="'+g.id+'">+1 '+esc(g.unit.replace(/s$/,''))+'</button></div>':'')+'</div>':'';
-    h+='<div class="goal" style="--gc:var('+g.color+')"><button data-act="gtoggle" data-id="'+g.id+'" style="width:100%;text-align:left" aria-expanded="'+!!ex+'"><div class="gt">'+esc(g.title)+'</div>'+
+      (g.metric==='minutes'?'<div class="goal-tools"><div class="eyebrow" style="margin-bottom:6px">Add time worked</div><div class="goal-slider-row"><input type="range" min="0" max="'+g.target+'" step="5" value="'+goalManualValue(g)+'" data-goal-slider="'+g.id+'" aria-label="Time worked for '+esc(g.title)+'"><span class="goal-slider-value num" id="gsv-'+g.id+'">'+durText(goalManualValue(g))+'</span></div><button class="btn goal-save" data-act="gsave" data-id="'+g.id+'">Save progress</button></div>':'')+
+      '<div class="btns"><button class="btn danger ghost goal-delete" data-act="gdelete" data-id="'+g.id+'">Delete goal</button></div>'+
+      '</div>':'';
+    h+='<div class="goal" data-goal-id="'+g.id+'" style="--gc:var('+g.color+')"><button data-act="gtoggle" data-id="'+g.id+'" style="width:100%;text-align:left" aria-expanded="'+!!ex+'"><div class="gt">'+esc(g.title)+'</div>'+
      '<div class="gnums"><span class="big num">'+gUnit(g,v)+'</span><span class="of num">of '+gUnit(g,g.target)+'</span><span class="num" style="margin-left:auto;font-weight:700">'+pc+'%</span></div>'+
      '<div class="gbar" role="progressbar" aria-valuenow="'+pc+'" aria-valuemin="0" aria-valuemax="100" aria-label="'+esc(g.title)+'"><i data-w="'+pc+'"></i></div>'+
      '<div class="gfoot"><span class="num"><b>'+gUnit(g,rem)+'</b> remaining</span>'+(dl!==null?'<span class="num"><b>'+dl+'</b> days left</span>':'<span>No deadline</span>')+'</div></button>'+cl+'</div>';
   });
   h+='</div><div class="btns"><button class="btn sec" data-act="add-goal">'+ic.plus.replace('<svg','<svg width="20" height="20"')+' New goal</button></div>';
-  $('#main').innerHTML=h;  requestAnimationFrame(function(){requestAnimationFrame(function(){$$('.gbar i').forEach(function(e){e.style.width=e.getAttribute('data-w')+'%'})})});
+  $('#main').innerHTML=h;
+  requestAnimationFrame(function(){requestAnimationFrame(function(){$$('.gbar i').forEach(function(e){e.style.width=e.getAttribute('data-w')+'%'})})});
 }
 
 /* ---------- search ---------- */
@@ -1054,6 +1139,8 @@ document.addEventListener('click',function(ev){
    case 'skipday':{TODAY=addDays(TODAY,1);NOWMIN=8*60;justPassed=addDays(TODAY,-1);sel=TODAY;view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};detail=null;$('#settings').classList.remove('on');render();
       toast(dLong(TODAY).split(', ')[1]+': '+dShort(addDays(TODAY,-1))+' is closed, '+dShort(addDays(TODAY,-2))+' is now locked');break}
    case 'reset':clearSavedData();items=[];logs={};goals=[];nid=100;if(cloudUser)queueCloudSave();$('#settings').classList.remove('on');closeDay();render();toast('All data cleared');break;   case 'gtoggle':open[id]=!open[id];renderGoals();break;
+   case 'gsave':saveGoalProgress(id);break;
+   case 'gdelete':deleteGoal(id);break;
    case 'gplus':{var g2=goals.filter(function(x){return x.id===id})[0];g2.manual=(g2.manual||0)+1;persistSoon();renderGoals();toast('+1 added to '+g2.title);break}
    case 'sf':srch[el.getAttribute('data-k')]=el.getAttribute('data-v');renderSearch();break;
    case 'sinc':srch.inc=!srch.inc;renderSearch();break;
@@ -1070,6 +1157,15 @@ function updLive(){
 }
 document.addEventListener('input',function(ev){
   var t=ev.target,id=t.id;
+  if(t.getAttribute&&t.getAttribute('data-goal-slider')){
+    var gid=t.getAttribute('data-goal-slider'),g=goals.filter(function(x){return x.id===gid})[0];
+    if(g){
+      var v=Math.max(0,Math.min(g.target,Math.round(+t.value/5)*5));
+      goalDraft[gid]=v;
+      var out=$('#gsv-'+gid);if(out)out.textContent=durText(v);
+    }
+    return;
+  }
   if(id==='amt'){var it=findItem(detail.id),l=L(it,detail.date);l.actual=+t.value;if(l.actual>=planned(it))l.o='done';updLive();return}
   if(id==='inc'){var it2=findItem(detail.id),l2=L(it2,detail.date);l2.income=parseFloat(t.value)||0;var h=(l2.actual||planned(it2))/60;var r=$('#rate');if(r)r.innerHTML=l2.income?'<b>'+durText(h*60)+'</b> · '+money(l2.income/h)+'/h':'No income recorded';return}
   if(id==='q'){srch.q=t.value;$('#results').innerHTML=resultsHTML();return}
@@ -1097,7 +1193,8 @@ document.addEventListener('keydown',function(ev){
   }
 });
 $('#scrim').addEventListener('click',closeDay);
-$$('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('on')})});
+$('#goalCompleteConfirm').addEventListener('click',finishGoal);
+$('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('on')})});
 
 /* drag and drop (desktop) */
 var dragging=null;
