@@ -1,5 +1,5 @@
 const CACHE="trackyou-v3";
-const CORE=["./","./index.html","./manifest.webmanifest","./icon-180.png","./icon-512.png"];
+const CORE=["./","./index.html","./manifest.webmanifest","./Logo%20tracKYOU.png","./Logo%20tracKYOU.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)));
@@ -37,8 +37,8 @@ self.addEventListener("push", event => {
   const title = data.title || "tracKYOU";
   const options = {
     body: data.body || "You have a reminder.",
-    icon: "./icon-180.png",
-    badge: "./icon-180.png",
+    icon: "./Logo%20tracKYOU.png",
+    badge: "./Logo%20tracKYOU.png",
     tag: data.reminderId ? "trackyou-" + data.reminderId : "trackyou-reminder",
     renotify: true,
     data: { url: data.url || "./" }
