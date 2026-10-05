@@ -1194,7 +1194,7 @@ document.addEventListener('keydown',function(ev){
 });
 $('#scrim').addEventListener('click',closeDay);
 $('#goalCompleteConfirm').addEventListener('click',finishGoal);
-$('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('on')})});
+$$('.modal').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('on')})});
 
 /* drag and drop (desktop) */
 var dragging=null;
