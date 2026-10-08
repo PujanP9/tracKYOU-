@@ -1310,7 +1310,7 @@ function startRealtime(){
     })
     .subscribe();
 }
-var NOTIFICATION_PUBLIC_KEY='BP41A9brEWHEbY9fb80OO1y-cudu3DlkmT9f-aqgniOnjPz6OY4MLImSd231Lu_kIKXIgIPpJekittNoeGMNsYU';
+var NOTIFICATION_PUBLIC_KEY='BCrWaKrYSs1BNRv_2Jas1zoTQOGc0exo-U1CdsOhjeJELydnex7CGTAY17Iud-ERE4BVbTbU2RGuu0NcXmE0G5k';
 function reminderFireTimes(it){
   if(!it||it.kind!=='reminder'||!it.date||!it.start)return [];
   return (it.rem||[]).map(function(offset){
