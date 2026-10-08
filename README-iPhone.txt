@@ -35,3 +35,14 @@ From this folder run:
 `python3 -m http.server 8000`
 
 Then open `http://localhost:8000/`.
+
+---------------------------------------------------------------
+Update (v4)
+- Works offline from the first launch (Supabase library, fonts and icons are bundled in this repo).
+- "Continue without an account" on the sign-in screen = use the app on this phone only (no reminders).
+- Reminders now cover timed tasks (15 min before), timed events (1 h and 15 min before),
+  work sessions (15 min before) and reminders (1 h, 15 min, at the time).
+- Settings → Cloud sync → "Send test notification" checks the whole chain in about a minute.
+- The server side is in supabase/ (function + migrations). If reminders stop arriving, run
+  supabase/migrations/20261008_fix_permissions_and_app_state.sql once in the Supabase SQL Editor.
+- Old files kept for reference: clean/, Logo tracKYOU.png, icon-180.png, icon-512.png.

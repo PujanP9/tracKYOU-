@@ -4,7 +4,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="tracKYOU">
-<link rel="apple-touch-icon" href="./Logo%20tracKYOU.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 
 <style>
 .auth-gate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(10,12,16,.72);backdrop-filter:blur(12px)}
@@ -24,9 +25,14 @@
 </style>
 </head><body>
 <title>tracKYOU</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+@font-face{font-family:'Bricolage Grotesque';font-weight:600;font-display:swap;src:url(./fonts/bricolage-grotesque-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Bricolage Grotesque';font-weight:700;font-display:swap;src:url(./fonts/bricolage-grotesque-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Figtree';font-weight:400;font-display:swap;src:url(./fonts/figtree-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Figtree';font-weight:500;font-display:swap;src:url(./fonts/figtree-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Figtree';font-weight:600;font-display:swap;src:url(./fonts/figtree-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Figtree';font-weight:700;font-display:swap;src:url(./fonts/figtree-latin-700-normal.woff2) format('woff2')}
+</style>
 <style>
 /* Layout: icon rail + month calendar + day panel on desktop; bottom nav + bottom sheet on phones.
    Light, warm-paper UI; gold appears only in the wordmark and five-star moments. */
@@ -384,11 +390,12 @@ h1,h2,h3{font-family:var(--display);margin:0;font-weight:700;letter-spacing:-.02
     <button id="authLogin" class="auth-btn" type="button">Sign in</button>
     <button id="authMode" class="auth-switch" type="button">New here? <b>Sign up</b></button>
     <div id="authMsg" class="auth-msg" aria-live="polite"></div>
+    <button id="authSkip" class="auth-switch" type="button">Continue without an account <span style="opacity:.7">(this phone only, no reminders)</span></button>
   </div>
 </div>
 
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./vendor/supabase.js"></script>
 <script>
 (function(){
 'use strict';
@@ -417,8 +424,10 @@ var dShort=function(s){return D(s).getDate()+' '+MS[D(s).getMonth()]};
 var plural=function(n,w){return n+' '+w+(n===1?'':'s')};
 
 /* ---------- state ---------- */
-var T0='2026-10-03';
-var TODAY=T0,NOWMIN=20*60+58;
+var ROLL=240; /* the day rolls over at 4:00 AM */
+function clock(){var n=new Date(),sh=new Date(n.getTime()-ROLL*60000);return {today:S(sh),min:sh.getHours()*60+sh.getMinutes(),real:n}}
+var T0=clock().today;
+var TODAY=T0,NOWMIN=clock().min+ROLL;
 var view={y:2026,m:9},sel=T0,screen='cal',detail=null,corr=false;
 var items=[],logs={},goals=[],nid=100,undoFn=null,toastTimer=null,justPassed=null;
 var srch={q:'Uber',type:'all',when:'any',inc:false,goal:''};
@@ -447,6 +456,7 @@ var ic={
 /* ---------- data ---------- */
 function mk(o){o.id=o.id||('i'+(nid++));items.push(o);return o}
 function hash(s){var x=7;for(var i=0;i<s.length;i++)x=(x*31+s.charCodeAt(i))>>>0;return x%10}
+function endMin(it){var e=tm(it.end);return e<=tm(it.start)?e+1440:e}
 function planned(it){if(it.dur)return it.dur;if(it.start&&it.end){var d=tm(it.end)-tm(it.start);return d<=0?d+1440:d}return 0}
 function occ(s){return items.filter(function(it){
   if(!it.rec)return it.date===s;
@@ -497,12 +507,11 @@ function init(){
   logs={};
   goals=[];
   nid=100;
-  var now=new Date();
-  TODAY=S(now);
-  T0=TODAY;
-  NOWMIN=now.getHours()*60+now.getMinutes();
+  var ck=clock();
+  TODAY=ck.today;T0=TODAY;
+  NOWMIN=ck.min+ROLL; /* minutes since midnight of TODAY (can pass 1440 before 4 AM) */
   sel=TODAY;
-  view={y:now.getFullYear(),m:now.getMonth()};
+  view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};
   detail=null;
   corr=false;
   undoFn=null;
@@ -558,7 +567,7 @@ function cellHTML(s,inMonth){
     (evs.length?', '+evs[0].title:'')+(st==='future'&&evs.length&&cd>0&&cd<400?', '+plural(cd,'day')+' away':'')+(st==='closed'?', day closed':st==='locked'?', record locked':'');
   var cls='cell '+(st==='future'?'':st==='open'?'today':'past')+(inMonth?'':' out')+(s===sel?' sel':'')+(hasWork?' work':'')+(justPassed===s?' pass-new':'');
   var pass=(st==='closed'||st==='locked')?'<svg class="pass" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M10 93 Q48 52 91 9"/></svg>':'';
-  var prog=st==='open'?'<span class="tprog" style="width:'+Math.round(NOWMIN/14.4)+'%"></span>':'';
+  var prog=st==='open'?'<span class="tprog" style="width:'+Math.min(100,Math.round(NOWMIN/14.4))+'%"></span>':'';
   return '<button class="'+cls+'" role="gridcell" data-act="pick" data-date="'+s+'" aria-label="'+esc(aria)+'"'+(s===sel?' aria-selected="true" tabindex="0"':' tabindex="-1"')+'>'+
     pass+'<span class="dn">'+D(s).getDate()+'</span>'+evh+'<span class="dots">'+dh+'</span>'+(hasWork?'<span class="wbar"></span>':'')+gl+prog+'</button>';
 }
@@ -757,7 +766,7 @@ function detailHTML(){
   var mv='';
   if(st==='open'||st==='future'){
     mv='<div class="fld"><label for="mvd">Move to</label><div class="chiprow" style="margin-top:0"><input class="inp" style="flex:1;min-width:150px" id="mvd" type="date" value="'+s+'" min="'+TODAY+'"><button class="chip sm" data-act="tomorrow">Tomorrow</button><button class="chip sm" data-act="nextweek">Next week</button></div></div>'+
-       '<div class="btns">'+(it.kind==='reminder'?'<button class="btn sec" data-act="turnoff">Turn off reminders</button>':'')+'<button class="btn ghost danger" data-act="del">Delete</button></div>';
+       '<div class="btns">'+(it.rem&&it.notify!==false?'<button class="btn sec" data-act="turnoff">Turn off reminders</button>':'')+'<button class="btn ghost danger" data-act="del">Delete</button></div>';
   }
   return '<div class="dp">'+head+body+mv+'</div>';
 }
@@ -775,19 +784,19 @@ function closeDay(){$('#day').classList.remove('open','full');$('#scrim').classL
 /* ---------- today ---------- */
 function renderToday(){
   var s=TODAY,list=occ(s).sort(sortIt),tr=list.filter(trackable),evs=list.filter(function(i){return !trackable(i)});
-  var left=1440-NOWMIN,hh=Math.floor(left/60),mm=left%60;
+  var left=Math.max(0,1440-NOWMIN),hh=Math.floor(left/60),mm=left%60;
   var grp=['must','important','should'].map(function(p){
     var g=tr.filter(function(i){return i.pri===p&&i.kind==='task'});if(!g.length)return '';
     return '<div class="grp"><div class="gh"><span class="shape '+PRI[p].cls+'"></span>'+PRI[p].n+'</div>'+g.map(function(i){return rowHTML(i,s,false)}).join('')+'</div>';
   }).join('');
   var wk=tr.filter(function(i){return i.kind==='work'}).map(function(it){
-    var l=L(it,s),st=NOWMIN>=tm(it.start)&&NOWMIN<tm(it.end)?'In progress · '+durText(NOWMIN-tm(it.start))+' in':NOWMIN>=tm(it.end)?'Finished':'Starts '+t12(tm(it.start));
+    var l=L(it,s),st=NOWMIN>=tm(it.start)&&NOWMIN<endMin(it)?'In progress · '+durText(NOWMIN-tm(it.start))+' in':NOWMIN>=endMin(it)?'Finished':'Starts '+t12(tm(it.start));
     var o=l?(l.o==='done'?'Completed':l.o==='partial'?'Partial':'Didn’t happen'):st;
     return '<div class="grp"><div class="gh"><span class="shape '+PRI[it.pri].cls+'"></span>'+PRI[it.pri].n+'</div><button class="wblock" data-act="open" data-id="'+it.id+'" data-date="'+s+'"><span class="tb"></span><span style="min-width:0;flex:1"><span class="wt" style="display:block">'+esc(it.title)+'</span><span class="wm num" style="display:block">'+rng(it.start,it.end)+' · '+durText(planned(it))+'</span><span class="wm" style="display:block">'+o+(l&&l.income?' · '+money(l.income):'')+'</span></span></button></div>';
   }).join('');
   var ev=evs.length?'<div class="grp"><div class="gh">Also today</div>'+evs.map(function(i){return evRowHTML(i,s)}).join('')+'</div>':'';
   $('#main').innerHTML='<div class="bar today-h"><div class="grow"><div class="eyebrow">Today</div><h1 class="h-title">'+dLong(s)+'</h1></div><button class="ibtn" data-act="settings" aria-label="Settings">'+ic.gear+'</button></div>'+
-   '<div class="daybar" role="img" aria-label="'+Math.round(NOWMIN/14.4)+' percent of the day has passed"><i style="width:'+(NOWMIN/14.4)+'%"></i></div><div class="daynote num">'+t12(NOWMIN)+' · '+hh+' h '+mm+' min left in the day</div>'+
+   '<div class="daybar" role="img" aria-label="'+Math.min(100,Math.round(NOWMIN/14.4))+' percent of the day has passed"><i style="width:'+Math.min(100,NOWMIN/14.4)+'%"></i></div><div class="daynote num">'+t12(NOWMIN%1440)+' · '+hh+' h '+mm+' min left in the day</div>'+
    grp+wk+ev+(grp||wk?'':'<div class="empty"><b>Nothing planned today</b>Add a task to start the day.</div>')+
    '<div class="sec-h"><span class="eyebrow">Upcoming</span></div>'+upcomingHTML(5);
 }
@@ -1030,11 +1039,12 @@ function saveAdd(){
   if(a.type==='task'){it.pri=a.pri;it.cat='life';if(a.mode==='dur')it.dur=a.dur;else{it.start=a.start;it.end=a.end}}
   if(a.type==='event'){it.evType=a.ev;it.allDay=a.allDay;if(!a.allDay)it.start=a.time}
   if(a.type==='reminder'){it.start=a.time;it.rem=[60,15,0];it.notify=true}
+  if(a.type==='event'&&!a.allDay){it.rem=[60,15];it.notify=true}
+  if((a.type==='task'&&a.mode!=='dur')||a.type==='work'){it.rem=[15];it.notify=true}
   if(a.type==='work'){it.pri='important';it.cat='work';it.start=a.wstart;it.end=a.wend;it.wcat=title}
   if((a.type==='task'||a.type==='work')&&a.rec.length)it.rec=a.rec.slice();
   if(a.goal){it.goal=a.goal;if(a.type==='work')it.alloc=true}
   var m=mk(it);
-  if(a.type==='reminder')queueReminderNotifications(m);
   if(a.type==='work'&&a.hasInc&&parseFloat(a.inc)>0&&a.date<=TODAY){setLog(m,a.date,{o:'done',income:parseFloat(a.inc)})}
   sel=a.date;var d=D(a.date);view={y:d.getFullYear(),m:d.getMonth()};
   persistSoon();closeAdd();if(screen!=='cal'&&screen!=='today')screen='cal';
@@ -1043,6 +1053,7 @@ function saveAdd(){
 }
 
 /* ---------- settings ---------- */
+var eraseArm=false,pushStatusText='';
 function renderSettings(){
   var th='system';try{th=localStorage.getItem('tk-theme')||'system'}catch(e){}
   var cs=getComputedStyle(document.documentElement);
@@ -1050,8 +1061,8 @@ function renderSettings(){
   $('#settings').innerHTML='<div class="msheet"><div class="grab"></div><div class="bar"><div class="grow wordmark" aria-label="tracKYOU">trac<b>KYOU</b></div><button class="ibtn" data-act="sclose" aria-label="Close">'+ic.x+'</button></div>'+
    '<div class="fld"><div class="lb">Appearance</div><div class="seg" role="group" aria-label="Theme">'+[['light','Light'],['dark','Dark'],['system','System']].map(function(x){return '<button data-act="theme" data-k="'+x[0]+'" aria-pressed="'+(th===x[0])+'">'+x[1]+'</button>'}).join('')+'</div></div>'+
    '<div class="fld"><div class="lb">Priority colours</div>'+['must','important','should'].map(function(p){var v='--'+(p==='important'?'imp':p);return '<div class="swrow"><span style="display:flex;align-items:center;gap:10px"><span class="shape '+PRI[p].cls+'"></span>'+PRI[p].n+'</span><input type="color" data-var="'+v+'" value="'+col(v)+'" aria-label="'+PRI[p].n+' colour"></div>'}).join('')+'</div>'+
-   '<div class="fld"><div class="lb">Cloud sync</div><div class="kv"><span>Account</span><span>'+esc(cloudUser?cloudUser.email:'Not signed in')+'</span></div><div class="btns"><button class="btn sec" data-act="enable-push"'+(cloudUser?'':' disabled')+'>Enable notifications</button><button class="btn ghost" data-act="signout"'+(cloudUser?'':' disabled')+'>Sign out</button></div></div>'+'<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
-   '<div class="fld"><div class="lb">Prototype controls</div><p class="hint" style="margin-top:0">Time is fixed at '+dLong(T0)+', 8:58 PM so every state is visible. Skip ahead to watch days close and lock.</p><div class="btns"><button class="btn sec" data-act="skipday">Skip to next morning</button><button class="btn ghost" data-act="reset">Reset demo</button></div></div></div>';
+   '<div class="fld"><div class="lb">Cloud sync</div><div class="kv"><span>Account</span><span>'+esc(cloudUser?cloudUser.email:'Not signed in')+'</span></div><div class="btns"><button class="btn sec" data-act="enable-push"'+(cloudUser?'':' disabled')+'>Enable notifications</button>'+(cloudUser?'<button class="btn ghost" data-act="signout">Sign out</button>':'<button class="btn sec" data-act="signin-open">Sign in</button>')+'</div>'+(cloudUser?'<div class="btns" style="margin-top:8px"><button class="btn ghost" data-act="test-push">Send test notification</button></div><p class="hint" id="pushStatus">'+esc(pushStatusText)+'</p>':'')+'</div>'+'<div class="fld"><div class="lb">Day rules</div><div class="kv"><span>Day closes</span><span>4:00 AM</span></div><div class="kv"><span>Day locks</span><span>24 hours after closing</span></div></div>'+
+   '<div class="fld"><div class="lb">Your data</div><p class="hint" style="margin-top:0">Erase every task, goal and log on this device'+(cloudUser?' and in your account':'')+'. This cannot be undone.</p><div class="btns"><button class="btn ghost danger" data-act="erase">'+(eraseArm?'Tap again to erase everything':'Erase all data')+'</button></div></div></div>';
 }
 
 /* ---------- render ---------- */
@@ -1078,7 +1089,7 @@ function commitLog(it,s,patch,msg){
 function refresh(){
   var keep=detail;
   if(screen==='cal')renderCal();else if(screen==='today')renderToday();else if(screen==='goals')renderGoals();
-  renderDay();detail=keep;
+  renderDay();detail=keep;persistSoon();
 }
 function moveItem(it,from,to){
   if(to<TODAY||stateOf(from)==='closed'||stateOf(from)==='locked')return;
@@ -1123,7 +1134,6 @@ document.addEventListener('click',function(ev){
    case 'nextweek':moveItem(findItem(detail.id),detail.date,addDays(detail.date,7));break;
    case 'del':{var it4=findItem(detail.id),s4=detail.date,bk=JSON.parse(JSON.stringify(it4));
       if(it4.rec){it4.ex=(it4.ex||[]).concat([s4])}else items=items.filter(function(x){return x!==it4});
-      if(it4.kind==='reminder')cancelReminderNotifications(it4.id);
       detail=null;persistSoon();refresh();toast('Deleted',function(){if(it4.rec){it4.ex=it4.ex.filter(function(x){return x!==s4})}else items.push(it4);refresh()});break}
    case 'corr-open':corr=true;renderDay();break;
    case 'corr-save':{var it5=findItem(detail.id),s5=detail.date,o5=el.getAttribute('data-o'),cur5=L(it5,s5),prev=cur5?cur5.o:'unmarked';
@@ -1149,11 +1159,13 @@ document.addEventListener('click',function(ev){
    case 'sclose':$('#settings').classList.remove('on');break;
    case 'theme':{var k=el.getAttribute('data-k');try{localStorage.setItem('tk-theme',k)}catch(e){}applyTheme(k);renderSettings();break}
    case 'enable-push':enablePushNotifications();break;
-   case 'turnoff':{var rit=findItem(detail.id);if(rit&&rit.kind==='reminder'){rit.notify=false;cancelReminderNotifications(rit.id);persistSoon();refresh();toast('Reminders turned off')}}break;
-   case 'signout':supabaseClient.auth.signOut();break
-   case 'skipday':{TODAY=addDays(TODAY,1);NOWMIN=8*60;justPassed=addDays(TODAY,-1);sel=TODAY;view={y:D(TODAY).getFullYear(),m:D(TODAY).getMonth()};detail=null;$('#settings').classList.remove('on');render();
-      toast(dLong(TODAY).split(', ')[1]+': '+dShort(addDays(TODAY,-1))+' is closed, '+dShort(addDays(TODAY,-2))+' is now locked');break}
-   case 'reset':clearSavedData();items=[];logs={};goals=[];nid=100;if(cloudUser)queueCloudSave();$('#settings').classList.remove('on');closeDay();render();toast('All data cleared');break;   case 'gtoggle':open[id]=!open[id];renderGoals();break;
+   case 'turnoff':{var rit=findItem(detail.id);if(rit&&rit.rem){rit.notify=false;persistSoon();refresh();toast('Reminders turned off')}}break;
+   case 'signout':if(supabaseClient)supabaseClient.auth.signOut();break
+   case 'erase':if(!eraseArm){eraseArm=true;renderSettings();setTimeout(function(){eraseArm=false;if($('#settings').classList.contains('on'))renderSettings()},5000)}
+      else{eraseArm=false;items=[];logs={};goals=[];nid=100;detail=null;localSaveData();if(cloudUser){lsSet(UNSYNCED_KEY,'1');queueCloudSave();queueNotifSync(true)}$('#settings').classList.remove('on');closeDay();render();toast('All data erased')}break;
+   case 'signin-open':lsDel(LOCAL_ONLY_KEY);$('#settings').classList.remove('on');showAuth();break;
+   case 'test-push':sendTestNotification();break;
+   case 'gtoggle':open[id]=!open[id];renderGoals();break;
    case 'gsave':saveGoalProgress(id);break;
    case 'gdelete':deleteGoal(id);break;
    case 'gplus':{var g2=goals.filter(function(x){return x.id===id})[0];g2.manual=(g2.manual||0)+1;persistSoon();renderGoals();toast('+1 added to '+g2.title);break}
@@ -1164,6 +1176,7 @@ document.addEventListener('click',function(ev){
 });
 function updLive(){
   var it=findItem(detail.id),l=L(it,detail.date),p=pctOf(it,l),pl=planned(it);
+  persistSoon();
   if(l.o==='done'){refresh();return}
   var e=$('#live');if(e)e.innerHTML='<b class="num">'+(l.actual||0)+' / '+pl+' min</b><span class="num">'+p+'%</span>'+starsHTML(p);
   var r=$('#amt');if(r)r.value=l.actual||0;
@@ -1183,7 +1196,7 @@ document.addEventListener('input',function(ev){
     return;
   }
   if(id==='amt'){var it=findItem(detail.id),l=L(it,detail.date);l.actual=+t.value;if(l.actual>=planned(it))l.o='done';updLive();return}
-  if(id==='inc'){var it2=findItem(detail.id),l2=L(it2,detail.date);l2.income=parseFloat(t.value)||0;var h=(l2.actual||planned(it2))/60;var r=$('#rate');if(r)r.innerHTML=l2.income?'<b>'+durText(h*60)+'</b> · '+money(l2.income/h)+'/h':'No income recorded';return}
+  if(id==='inc'){var it2=findItem(detail.id),l2=L(it2,detail.date);l2.income=parseFloat(t.value)||0;persistSoon();var h=(l2.actual||planned(it2))/60;var r=$('#rate');if(r)r.innerHTML=l2.income?'<b>'+durText(h*60)+'</b> · '+money(l2.income/h)+'/h':'No income recorded';return}
   if(id==='q'){srch.q=t.value;$('#results').innerHTML=resultsHTML();return}
   if(!addS||!$('#add').classList.contains('on'))return;
   var map={'a-title':'title','a-date':'date','a-start':'start','a-end':'end','a-ws':'wstart','a-we':'wend','a-inc':'inc','a-target':'target','a-dl':'deadline','a-time':'time'};
@@ -1223,158 +1236,190 @@ function applyTheme(k){var r=document.documentElement;if(k==='light'||k==='dark'
 try{var th=localStorage.getItem('tk-theme');if(th)applyTheme(th)}catch(e){}
 
 /* ---------- local + cloud persistence ---------- */
-var STORAGE_KEY='trackyou-data-v1';
+var STORAGE_KEY='trackyou-data-v1',UNSYNCED_KEY='trackyou-unsynced',LOCAL_ONLY_KEY='trackyou-local-only';
 var SUPABASE_URL='https://qglfbqgsqlfqrsiphbwg.supabase.co';
 var SUPABASE_PUBLISHABLE_KEY='sb_publishable_JOXTApqzpv4mPKjaQ5LuTw_PKM5x9K2';
-var supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}});
-var cloudUser=null,cloudTimer=null,cloudSyncing=false,cloudRealtime=null;
-
-function localSaveData(){
-  try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify({items:items,logs:logs,goals:goals,nid:nid}));
-  }catch(e){}
-}
+var supabaseClient=null;
+try{if(window.supabase&&window.supabase.createClient)supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}})}catch(e){console.error('supabase init:',e)}
+var cloudUser=null,cloudTimer=null,cloudSyncing=false,cloudDirty=false,cloudRealtime=null,lastCloudStamp=null,lastSnap='';
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
+function snapshot(){return JSON.stringify({items:items,logs:logs,goals:goals,nid:nid})}
+function localSaveData(){var snap=snapshot();lastSnap=snap;lsSet(STORAGE_KEY,snap)}
 function saveData(){
+  var snap=snapshot();
+  if(snap===lastSnap)return;           /* nothing changed */
   localSaveData();
-  if(cloudUser) queueCloudSave();
+  if(cloudUser){lsSet(UNSYNCED_KEY,'1');queueCloudSave();queueNotifSync()}
 }
 function loadData(){
   try{
-    var raw=localStorage.getItem(STORAGE_KEY);
-    if(!raw) raw=localStorage.getItem('trackyou-clean-v2-data');
+    var raw=lsGet(STORAGE_KEY);
+    if(!raw)raw=lsGet('trackyou-clean-v2-data');
     if(!raw)return false;
     var d=JSON.parse(raw);
     if(!d||!Array.isArray(d.items)||!Array.isArray(d.goals)||!d.logs)return false;
     items=d.items;logs=d.logs;goals=d.goals;nid=Number(d.nid)||100;
-    localSaveData();
-    try{localStorage.removeItem('trackyou-clean-v2-data')}catch(e){}
+    localSaveData();lsDel('trackyou-clean-v2-data');
     return true;
   }catch(e){return false}
 }
-function clearSavedData(){
-  try{localStorage.removeItem(STORAGE_KEY);localStorage.removeItem('trackyou-clean-v2-data')}catch(e){}
+function clearSavedData(){lsDel(STORAGE_KEY);lsDel('trackyou-clean-v2-data');lsDel(UNSYNCED_KEY);lastSnap=''}
+function applyRemote(row){
+  items=Array.isArray(row.items)?row.items:[];
+  logs=row.logs&&typeof row.logs==='object'?row.logs:{};
+  goals=Array.isArray(row.goals)?row.goals:[];
+  nid=Number(row.nid)||100;
+  localSaveData();
 }
 async function cloudSaveNow(){
-  if(!cloudUser||cloudSyncing)return;
-  cloudSyncing=true;
+  if(!cloudUser||!supabaseClient)return;
+  if(cloudSyncing){cloudDirty=true;return}
+  cloudSyncing=true;cloudDirty=false;
+  var stamp=new Date().toISOString();
   try{
-    var res=await supabaseClient.from('app_state').upsert({
-      user_id:cloudUser.id,
-      items:items,
-      logs:logs,
-      goals:goals,
-      nid:nid,
-      updated_at:new Date().toISOString()
-    },{onConflict:'user_id'});
-    if(res.error)console.error('tracKYOU cloud save:',res.error);
-  }catch(e){console.error('tracKYOU cloud save:',e)}
-  finally{cloudSyncing=false}
+    var res=await supabaseClient.from('app_state').upsert({user_id:cloudUser.id,items:items,logs:logs,goals:goals,nid:nid,updated_at:stamp},{onConflict:'user_id'});
+    if(res.error){console.error('tracKYOU cloud save:',res.error);clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudSaveNow,15000)}
+    else{lastCloudStamp=stamp;if(!cloudDirty)lsDel(UNSYNCED_KEY)}
+  }catch(e){console.error('tracKYOU cloud save:',e);clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudSaveNow,15000)}
+  finally{cloudSyncing=false;if(cloudDirty){cloudDirty=false;queueCloudSave()}}
 }
-function queueCloudSave(){
-  clearTimeout(cloudTimer);
-  cloudTimer=setTimeout(cloudSaveNow,350);
-}
+function queueCloudSave(){clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudSaveNow,350)}
 async function cloudLoad(){
-  if(!cloudUser)return;
+  if(!cloudUser||!supabaseClient)return;
   try{
     var res=await supabaseClient.from('app_state').select('items,logs,goals,nid,updated_at').eq('user_id',cloudUser.id).maybeSingle();
     if(res.error){console.error('tracKYOU cloud load:',res.error);toast('Cloud sync error — check Supabase permissions');return}
-    if(res.data){
-      items=Array.isArray(res.data.items)?res.data.items:[];
-      logs=res.data.logs&&typeof res.data.logs==='object'?res.data.logs:{};
-      goals=Array.isArray(res.data.goals)?res.data.goals:[];
-      nid=Number(res.data.nid)||100;
-      localSaveData();
+    if(res.data&&lsGet(UNSYNCED_KEY)!=='1'){
+      applyRemote(res.data);
       render();
-      Promise.all(items.filter(function(x){return x.kind==='reminder'&&x.notify!==false}).map(queueReminderNotifications));
       toast('Synced from cloud');
     }else{
+      /* first sign-in, or this phone has changes the cloud has not seen yet */
       await cloudSaveNow();
-      toast('Cloud sync enabled');
     }
+    queueNotifSync(true);
   }catch(e){console.error('tracKYOU cloud load:',e);toast('Could not connect to cloud')}
 }
 function startRealtime(){
-  if(cloudRealtime) supabaseClient.removeChannel(cloudRealtime);
+  if(!supabaseClient||!cloudUser)return;
+  if(cloudRealtime)supabaseClient.removeChannel(cloudRealtime);
   cloudRealtime=supabaseClient.channel('trackyou-app-state')
     .on('postgres_changes',{event:'*',schema:'public',table:'app_state',filter:'user_id=eq.'+cloudUser.id},function(payload){
       if(payload.eventType==='DELETE')return;
-      var row=payload.new;
-      if(!row)return;
-      items=Array.isArray(row.items)?row.items:[];
-      logs=row.logs&&typeof row.logs==='object'?row.logs:{};
-      goals=Array.isArray(row.goals)?row.goals:[];
-      nid=Number(row.nid)||100;
-      localSaveData();
-      render();
+      var row=payload.new;if(!row)return;
+      if(lastCloudStamp&&Date.parse(row.updated_at)===Date.parse(lastCloudStamp))return; /* our own save echoing back */
+      if(cloudSyncing||cloudTimer&&lsGet(UNSYNCED_KEY)==='1')return;                        /* we have newer local edits */
+      applyRemote(row);
+      if(!detail&&!$('#add').classList.contains('on'))render();else refresh();
+      queueNotifSync();
     })
     .subscribe();
 }
+
+/* ---------- reminders / push notifications ---------- */
 var NOTIFICATION_PUBLIC_KEY='BCrWaKrYSs1BNRv_2Jas1zoTQOGc0exo-U1CdsOhjeJELydnex7CGTAY17Iud-ERE4BVbTbU2RGuu0NcXmE0G5k';
-function reminderFireTimes(it){
-  if(!it||it.kind!=='reminder'||!it.date||!it.start)return [];
-  return (it.rem||[]).map(function(offset){
-    var base=new Date(it.date+'T'+it.start+':00');
-    return {offset:offset,at:new Date(base.getTime()-offset*60000)};
-  }).filter(function(x){return x.at.getTime()>Date.now()-60000});
-}
-async function queueReminderNotifications(it){
-  if(!cloudUser||!it||it.kind!=='reminder')return;
-  try{
-    await supabaseClient.from('notification_queue').delete().eq('user_id',cloudUser.id).eq('reminder_id',it.id);
-    var rows=reminderFireTimes(it).map(function(x){
-      var label=x.offset===0?'Time to '+it.title:x.offset===60?it.title+' in 1 hour':it.title+' in 15 minutes';
-      return {user_id:cloudUser.id,reminder_id:it.id,title:'tracKYOU',body:label,send_at:x.at.toISOString(),status:'pending'};
+var NOTIF_DAYS=7;
+function notifLabel(it,off){return off===0?'Time to '+it.title:off===60?it.title+' in 1 hour':it.title+' in '+off+' minutes'}
+/* every notification that should exist right now: [{rid, at(Date), body}] */
+function wantedNotifications(){
+  var out=[],now=Date.now(),start=addDays(TODAY,-1);
+  for(var n=0;n<=NOTIF_DAYS+1;n++){
+    var d=addDays(start,n);
+    occ(d).forEach(function(it){
+      if(!it.start||!it.rem||!it.rem.length||it.notify===false||it.allDay)return;
+      var l=L(it,d);if(l&&(l.o==='done'||l.o==='skipped'))return;
+      var base=new Date(d+'T'+it.start+':00').getTime();
+      if(isNaN(base))return;
+      it.rem.forEach(function(off){
+        var at=base-off*60000;
+        if(at<now-60000||at>now+NOTIF_DAYS*864e5)return;
+        out.push({rid:it.id+'@'+d+'@'+it.start+'@'+off,at:new Date(at),body:notifLabel(it,off)});
+      });
     });
-    if(rows.length)await supabaseClient.from('notification_queue').insert(rows);
-  }catch(e){console.error('notification queue:',e)}
+  }
+  return out;
 }
-async function cancelReminderNotifications(reminderId){
-  if(!cloudUser||!reminderId)return;
-  try{await supabaseClient.from('notification_queue').delete().eq('user_id',cloudUser.id).eq('reminder_id',reminderId)}catch(e){console.error('notification cancel:',e)}
+var notifTimer=null,notifBusy=false,notifAgain=false,notifStatus='';
+function queueNotifSync(now){clearTimeout(notifTimer);notifTimer=setTimeout(syncNotificationQueue,now?0:1500)}
+async function syncNotificationQueue(){
+  if(!cloudUser||!supabaseClient)return;
+  if(notifBusy){notifAgain=true;return}
+  notifBusy=true;
+  try{
+    var want=wantedNotifications(),since=new Date(Date.now()-864e5).toISOString();
+    var res=await supabaseClient.from('notification_queue').select('id,reminder_id,status').eq('user_id',cloudUser.id).gte('send_at',since).limit(1000);
+    if(res.error){console.error('notification queue read:',res.error);notifStatus='Could not read the reminder queue: '+res.error.message;return}
+    var have={},wantKeys={};
+    want.forEach(function(w){wantKeys[w.rid]=1});
+    var stale=[];
+    (res.data||[]).forEach(function(r){have[r.reminder_id]=1;if(r.status==='pending'&&!wantKeys[r.reminder_id]&&String(r.reminder_id).indexOf('test@')!==0)stale.push(r.id)});
+    /* pending rows from the old app version (plain item id, no date) */
+    if(stale.length){var del=await supabaseClient.from('notification_queue').delete().in('id',stale);if(del.error)console.error('notification queue delete:',del.error)}
+    var rows=want.filter(function(w){return !have[w.rid]}).map(function(w){return {user_id:cloudUser.id,reminder_id:w.rid,title:'tracKYOU',body:w.body,send_at:w.at.toISOString(),status:'pending'}});
+    if(rows.length){
+      var ins=await supabaseClient.from('notification_queue').insert(rows);
+      if(ins.error){console.error('notification queue insert:',ins.error);notifStatus='Could not queue reminders: '+ins.error.message;return}
+    }
+    notifStatus='';
+  }catch(e){console.error('notification queue:',e)}
+  finally{notifBusy=false;if(notifAgain){notifAgain=false;queueNotifSync()}}
 }
 function urlBase64ToUint8Array(base64String){
   var padding='='.repeat((4-base64String.length%4)%4),base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
   var raw=atob(base64);var out=new Uint8Array(raw.length);for(var i=0;i<raw.length;++i)out[i]=raw.charCodeAt(i);return out;
 }
+function setPushStatus(t){pushStatusText=t;var e=$('#pushStatus');if(e)e.textContent=t}
+function withTimeout(p,ms,msg){return Promise.race([p,new Promise(function(_,rej){setTimeout(function(){rej(new Error(msg))},ms)})])}
 async function enablePushNotifications(){
   if(!cloudUser){toast('Please sign in first');return}
-  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){toast('Push notifications are not supported here');return}
-  if(!NOTIFICATION_PUBLIC_KEY){toast('Push setup is not configured yet');return}
+  var ios=/iPhone|iPad|iPod/.test(navigator.userAgent),standalone=window.navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+  if(ios&&!standalone){setPushStatus('On iPhone, open tracKYOU from its Home Screen icon (Share → Add to Home Screen), then try again.');toast('Open the Home Screen app first');return}
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){setPushStatus('This browser does not support push notifications.');toast('Push notifications are not supported here');return}
   try{
     var permission=Notification.permission;
     if(permission!=='granted')permission=await Notification.requestPermission();
-    if(permission!=='granted'){toast('Notifications were not allowed');return}
-    var reg=await navigator.serviceWorker.ready;
-    var key=urlBase64ToUint8Array(NOTIFICATION_PUBLIC_KEY);
+    if(permission!=='granted'){setPushStatus('Notifications are blocked. Turn them on in iPhone Settings → Notifications → tracKYOU.');toast('Notifications were not allowed');return}
+    var reg=await withTimeout(navigator.serviceWorker.ready,8000,'The app is still starting. Close it, reopen and try again.');
     var sub=await reg.pushManager.getSubscription();
-    if(sub){
-      try{
-        var oldJson=sub.toJSON();
-        if(oldJson&&oldJson.options&&oldJson.options.applicationServerKey){
-          sub=await sub.unsubscribe()?null:sub;
-        }else{
-          sub=await sub.unsubscribe()?null:sub;
-        }
-      }catch(e){console.warn('old push subscription:',e);sub=null}
-    }
-    sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+    if(sub){try{await sub.unsubscribe()}catch(e){console.warn('old push subscription:',e)}}
+    sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(NOTIFICATION_PUBLIC_KEY)});
     var json=sub.toJSON();
-    if(!json||!json.endpoint||!json.keys){throw new Error('Push subscription did not return valid keys')}
+    if(!json||!json.endpoint||!json.keys)throw new Error('Push subscription did not return valid keys');
     var res=await supabaseClient.from('push_subscriptions').upsert({user_id:cloudUser.id,endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,updated_at:new Date().toISOString()},{onConflict:'endpoint'});
-    if(res.error){console.error('push subscription save:',res.error);toast('Could not save notification permission: '+res.error.message);return}
-    toast('Notifications enabled');
+    if(res.error){console.error('push subscription save:',res.error);setPushStatus('Could not save this phone: '+res.error.message);toast('Could not save notification permission');return}
+    setPushStatus('Notifications enabled on this phone.');toast('Notifications enabled');
+    queueNotifSync(true);
   }catch(e){
     console.error('enable push:',e);
-    toast('Notification setup failed: '+(e&&e.message?e.message:'Unknown error'));
+    setPushStatus('Notification setup failed: '+(e&&e.message?e.message:'Unknown error'));toast('Notification setup failed');
   }
 }
-function showAuth(){
-  $('#authGate').hidden=false;
+async function sendTestNotification(){
+  if(!cloudUser){toast('Please sign in first');return}
+  var rid='test@'+Date.now();
+  setPushStatus('Sending…');
+  var subs=await supabaseClient.from('push_subscriptions').select('endpoint',{count:'exact',head:true}).eq('user_id',cloudUser.id);
+  if(!subs.error&&!subs.count){setPushStatus('This account has no phone registered yet. Tap “Enable notifications” first.');return}
+  var ins=await supabaseClient.from('notification_queue').insert({user_id:cloudUser.id,reminder_id:rid,title:'tracKYOU',body:'Test notification — it works!',send_at:new Date().toISOString(),status:'pending'});
+  if(ins.error){setPushStatus('Could not queue the test: '+ins.error.message);return}
+  setPushStatus('Test queued. It should arrive within a minute (the server checks every minute).');
+  var tries=0;
+  (function poll(){
+    setTimeout(async function(){
+      tries++;
+      var r=await supabaseClient.from('notification_queue').select('status,error').eq('user_id',cloudUser.id).eq('reminder_id',rid).maybeSingle();
+      if(r.data&&r.data.status==='sent'){setPushStatus('Sent. If nothing appeared, check iPhone Settings → Notifications → tracKYOU and Focus mode.');return}
+      if(r.data&&r.data.status==='failed'){setPushStatus('Server could not send it: '+(r.data.error||'unknown error'));return}
+      if(tries<12)poll();else setPushStatus('Still waiting. The server may not be running — see README (Supabase section).');
+    },10000);
+  })();
 }
-function hideAuth(){
-  $('#authGate').hidden=true;
-}
+
+/* ---------- accounts ---------- */
+function showAuth(){$('#authGate').hidden=false}
+function hideAuth(){$('#authGate').hidden=true}
 var authMode='signin';
 function setAuthMode(mode){
   authMode=mode;
@@ -1391,51 +1436,52 @@ function setAuthMode(mode){
 async function signIn(){
   var email=$('#authEmail').value.trim(),password=$('#authPassword').value;
   var msg=$('#authMsg'),btn=$('#authLogin');
+  if(!supabaseClient){msg.textContent='Sign-in needs an internet connection.';return}
   if(!email||!password){msg.textContent='Enter your email and password.';return}
   btn.disabled=true;msg.textContent='Signing in…';
-  var res=await supabaseClient.auth.signInWithPassword({email:email,password:password});
-  if(res.error)msg.textContent=res.error.message;
-  else msg.textContent='Signed in.';
+  try{
+    var res=await supabaseClient.auth.signInWithPassword({email:email,password:password});
+    msg.textContent=res.error?res.error.message:'Signed in.';
+    if(!res.error)lsDel(LOCAL_ONLY_KEY);
+  }catch(e){msg.textContent='Could not reach the server. Check your connection.'}
   btn.disabled=false;
 }
 async function signUp(){
   var email=$('#authEmail').value.trim(),password=$('#authPassword').value,confirm=$('#authConfirm').value,name=$('#authName').value.trim();
   var msg=$('#authMsg'),btn=$('#authLogin');
+  if(!supabaseClient){msg.textContent='Sign-up needs an internet connection.';return}
   if(!name){msg.textContent='Enter your name.';return}
   if(!email||!password){msg.textContent='Enter your email and password.';return}
   if(password.length<6){msg.textContent='Password must be at least 6 characters.';return}
   if(password!==confirm){msg.textContent='Passwords do not match.';return}
   btn.disabled=true;msg.textContent='Creating your account…';
-  var res=await supabaseClient.auth.signUp({email:email,password:password,options:{data:{full_name:name}}});
-  if(res.error){msg.textContent=res.error.message;btn.disabled=false;return}
-  if(res.data&&res.data.session){
-    msg.textContent='Account created. Signing you in…';
-  }else{
-    msg.textContent='Account created. Check your email to confirm, then sign in.';
-    setAuthMode('signin');
-    $('#authEmail').value=email;
-  }
+  try{
+    var res=await supabaseClient.auth.signUp({email:email,password:password,options:{data:{full_name:name}}});
+    if(res.error){msg.textContent=res.error.message;btn.disabled=false;return}
+    if(res.data&&res.data.session){msg.textContent='Account created. Signing you in…';lsDel(LOCAL_ONLY_KEY)}
+    else{msg.textContent='Account created. Check your email to confirm, then sign in.';setAuthMode('signin');$('#authEmail').value=email}
+  }catch(e){msg.textContent='Could not reach the server. Check your connection.'}
   btn.disabled=false;
 }
-
 async function bootCloud(){
-  var res=await supabaseClient.auth.getSession();
-  if(res.data&&res.data.session){
-    cloudUser=res.data.session.user;
-    hideAuth();
-    await cloudLoad();
-    startRealtime();
-  }else showAuth();
-  supabaseClient.auth.onAuthStateChange(function(event,session){
+  if(!supabaseClient){hideAuth();return}
+  var session=null;
+  try{var res=await supabaseClient.auth.getSession();session=res.data&&res.data.session}catch(e){console.error('getSession:',e)}
+  if(session){
+    cloudUser=session.user;hideAuth();
+    await cloudLoad();startRealtime();
+  }else if(lsGet(LOCAL_ONLY_KEY)==='1'||!navigator.onLine)hideAuth();
+  else showAuth();
+  supabaseClient.auth.onAuthStateChange(function(event,s){
     if(event==='SIGNED_OUT'){
-      cloudUser=null;
+      cloudUser=null;lastCloudStamp=null;
       if(cloudRealtime){supabaseClient.removeChannel(cloudRealtime);cloudRealtime=null}
-      showAuth();
+      if(lsGet(LOCAL_ONLY_KEY)!=='1')showAuth();
       return;
     }
-    if(session&&session.user&&event==='SIGNED_IN'){
-      cloudUser=session.user;
-      hideAuth();
+    if(s&&s.user&&event==='SIGNED_IN'){
+      if(cloudUser&&cloudUser.id===s.user.id){cloudUser=s.user;return} /* app re-focused; nothing to do */
+      cloudUser=s.user;hideAuth();
       cloudLoad().then(startRealtime);
     }
   });
@@ -1446,8 +1492,31 @@ var _setLogOriginal=setLog;
 setLog=function(it,s,patch){var out=_setLogOriginal(it,s,patch);persistSoon();return out};
 var _mkOriginal=mk;
 mk=function(o){var out=_mkOriginal(o);persistSoon();return out};
+window.addEventListener('pagehide',function(){try{saveData()}catch(e){}});
+
+/* ---------- live clock: keeps TODAY / NOWMIN right while the app stays open ---------- */
+function tick(){
+  var ck=clock(),mins=ck.min+ROLL;
+  if(ck.today!==TODAY){
+    var wasToday=sel===TODAY;
+    justPassed=TODAY;TODAY=ck.today;T0=TODAY;NOWMIN=mins;
+    if(wasToday)sel=TODAY;
+    view={y:D(sel).getFullYear(),m:D(sel).getMonth()};
+    detail=null;corr=false;render();
+    toast('A new day has started');
+    queueNotifSync();
+    return;
+  }
+  if(mins!==NOWMIN){
+    NOWMIN=mins;
+    if(!detail&&!$('#add').classList.contains('on')&&!$('#settings').classList.contains('on')&&document.activeElement&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){refresh()}
+  }
+}
+setInterval(tick,30000);
+document.addEventListener('visibilitychange',function(){if(!document.hidden){tick();if(cloudUser)queueNotifSync()}});
 
 init(); if(!loadData()) saveData(); render();
+$('#authSkip').addEventListener('click',function(){lsSet(LOCAL_ONLY_KEY,'1');hideAuth();toast('Using tracKYOU on this phone only')});
 $('#authLogin').addEventListener('click',function(){authMode==='signup'?signUp():signIn()});
 $('#authMode').addEventListener('click',function(){setAuthMode(authMode==='signup'?'signin':'signup')});
 $('#authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')authMode==='signup'?signUp():signIn()});
